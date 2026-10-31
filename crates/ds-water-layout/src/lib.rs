@@ -12,8 +12,9 @@
 //! | Line | `pipe` or none | A pipe (drawn network) |
 //! | Line | `road`, `track`, `path` | A corridor pipes may follow (automatic layout) |
 //!
-//! Demand is `demand_lps`, else `population` × litres per capita per day ×
-//! peak factor. Elevation is the geometry's Z, else `elevation_m`, else the
+//! Demand is `demand_lps`, else the national standard for the point's kind
+//! (MININFRA Table 1-3, see [`demand`]: people, beds, students, head...),
+//! else `population` × litres per capita per day; both × the peak factor. Elevation is the geometry's Z, else `elevation_m`, else the
 //! caller's elevation source, else interpolated from known neighbours. Pipe
 //! length is measured along the slope between its end nodes.
 //!
@@ -25,6 +26,7 @@
 //! from its sources with `ds-graph`, the primitive LV uses, so trunk and
 //! branch paths ("01", "02", …) mean the same thing in both verticals.
 
+pub mod demand;
 pub mod geo;
 
 use std::collections::{HashMap, HashSet};
@@ -538,14 +540,22 @@ fn read_features(
                     "source" | "reservoir" | "spring" | "borehole" | "intake" => PointRole::Source,
                     "tank" => PointRole::Tank,
                     "standpost" | "kiosk" | "institution" | "junction" => PointRole::OwnJunction,
+                    // Institutions in the national table get their own connection.
+                    k if demand::standard(k)
+                        .is_some_and(|s| !matches!(s.kind, "household" | "urban_household")) =>
+                    {
+                        PointRole::OwnJunction
+                    }
                     _ => PointRole::Demand,
                 };
-                let demand_lps = number("demand_lps").unwrap_or_else(|| {
-                    number("population").unwrap_or(0.0)
-                        * opts.litres_per_capita_day
-                        * opts.peak_factor
-                        / 86_400.0
-                });
+                // Explicit demand wins; otherwise the national standard row
+                // for the kind; otherwise people at the configured l/c/d.
+                let per_day = |litres: f64| litres * opts.peak_factor / 86_400.0;
+                let demand_lps = number("demand_lps")
+                    .or_else(|| demand::daily_litres(&kind, |p| number(p)).map(per_day))
+                    .unwrap_or_else(|| {
+                        per_day(number("population").unwrap_or(0.0) * opts.litres_per_capita_day)
+                    });
                 points.push(PointFeature {
                     id,
                     at,

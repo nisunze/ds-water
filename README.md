@@ -21,6 +21,8 @@ sampling) with ds-network by path, and follows the same Kernel command surface.
 | `ds-water-synth` | Deterministic synthetic networks up to country scale |
 | `apps/ds-water-cli` | `ds-water` headless binary |
 
+See [docs/water-engineering.md](docs/water-engineering.md) for the concepts (LV/MV ↔ water), Rwanda's demand standard and the sources.
+
 Next: the WASM unit (`ds-water-wasm`), the `ds water` chapter through the
 Kernel, the Water tab, PDF through the Reporter's renderer, pressure zoning.
 
