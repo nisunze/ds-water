@@ -1,0 +1,12 @@
+[package]
+name = "ds-water-hydraulics"
+description = "Water network hydraulics: GGA steady state, extended period, pressure-driven demand, sparse Cholesky sized for country-wide networks."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ds-water-model.workspace = true
+serde.workspace = true
+thiserror.workspace = true

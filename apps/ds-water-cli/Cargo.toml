@@ -1,0 +1,20 @@
+[package]
+name = "ds-water-cli"
+description = "Headless Water: validate, simulate, design, profile, lay out, draw and exchange water networks."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ds-water"
+path = "src/main.rs"
+
+[dependencies]
+ds-water-model.workspace = true
+ds-water-hydraulics.workspace = true
+ds-water-synth.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true

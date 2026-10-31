@@ -1,0 +1,10 @@
+[package]
+name = "ds-water-synth"
+description = "Deterministic synthetic water networks, from a village to a country, for scale tests and benchmarks."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ds-water-model.workspace = true

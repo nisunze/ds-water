@@ -1,0 +1,40 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "UNLICENSED"
+repository = "https://github.com/nisunze/ds-water"
+
+[workspace.dependencies]
+ds-water-model = { path = "crates/ds-water-model" }
+ds-water-hydraulics = { path = "crates/ds-water-hydraulics" }
+ds-water-design = { path = "crates/ds-water-design" }
+ds-water-profile = { path = "crates/ds-water-profile" }
+ds-water-layout = { path = "crates/ds-water-layout" }
+ds-water-drawing = { path = "crates/ds-water-drawing" }
+ds-water-synth = { path = "crates/ds-water-synth" }
+
+# Shared with the LV and MV verticals (ds-network), read-only by path: the
+# oriented-tree primitive and the metric route sampler.
+ds-graph = { path = "../ds-network/crates/ds-graph" }
+ds-terrain-sampling = { path = "../ds-network/crates/ds-terrain-sampling" }
+
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+libm = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+thiserror = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+[profile.dev.package.ds-water-hydraulics]
+opt-level = 3
