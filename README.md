@@ -19,12 +19,15 @@ sampling) with ds-network by path, and follows the same Kernel command surface.
 | `ds-water-profile` | Vertical: ground (via `ds-terrain-sampling`), pipe, HGL and static lines; air valves, washouts, isolation valves, break-pressure tanks, findings |
 | `ds-water-drawing` | Sheets: network plan, plan-and-profile with data bands, schedules (ISO A-size SVG, mm) |
 | `ds-water-synth` | Deterministic synthetic networks up to country scale |
-| `apps/ds-water-cli` | `ds-water` headless binary |
+| `ds-water-ops` | The command surface: one `invoke(operation, request)` for CLI, WASM unit and Kernel |
+| `ds-water-wasm` | Browser unit (`water_invoke`), built on magese-think |
+| `apps/ds-water-cli` | `ds-water` headless binary over `ds-water-ops` |
 
 See [docs/water-engineering.md](docs/water-engineering.md) for the concepts (LV/MV ↔ water), Rwanda's demand standard and the sources.
 
-Next: the WASM unit (`ds-water-wasm`), the `ds water` chapter through the
-Kernel, the Water tab, PDF through the Reporter's renderer, pressure zoning.
+Next: the `ds water` chapter through the Kernel (Core native, Web through
+the unit), the Water tab beside LV/MV/PM, ground from the existing
+raster/terrain plugin, PDF through the Reporter's renderer.
 
 ## Headless use
 
