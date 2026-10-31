@@ -17,6 +17,20 @@ pub fn water_invoke(operation: &str, request_json: &str) -> Result<String, Strin
     serde_json::to_string(&answer).map_err(|e| e.to_string())
 }
 
+/// The page's unit door calls one argument: `{operation, request}`, framed
+/// by the Kernel (`water_web::frame`).
+#[wasm_bindgen]
+pub fn water_invoke_json(frame_json: &str) -> Result<String, String> {
+    let frame: serde_json::Value =
+        serde_json::from_str(frame_json).map_err(|e| format!("water_request_invalid: {e}"))?;
+    let operation = frame["operation"]
+        .as_str()
+        .ok_or("water_request_invalid: the frame names no operation")?;
+    let answer =
+        ds_water_ops::invoke(operation, frame["request"].clone()).map_err(|e| e.to_string())?;
+    serde_json::to_string(&answer).map_err(|e| e.to_string())
+}
+
 /// The unit's identity: what the Kernel admits it by — the engine, its
 /// operations and the producer receipt (source and dependency closure) the
 /// release stamped into it.
