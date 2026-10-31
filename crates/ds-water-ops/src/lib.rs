@@ -9,6 +9,8 @@
 //! [`GridSurface`] that the caller sampled from the project's existing
 //! raster/terrain layers; the engine never reads raster files.
 
+pub mod analysis;
+
 use ds_water_design::{BoqLine, Catalogue, DesignCriteria, DesignResult};
 use ds_water_drawing::{DrawingOptions, Sheet, TitleInfo};
 use ds_water_hydraulics::{Hydraulics, Snapshot};
@@ -18,8 +20,9 @@ use ds_water_profile::{ProfileOptions, ProfileResult};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub const OPERATIONS: [&str; 9] = [
-    "identity", "validate", "simulate", "layout", "process", "design", "profile", "draw", "scheme",
+pub const OPERATIONS: [&str; 10] = [
+    "identity", "validate", "simulate", "analysis", "layout", "process", "design", "profile",
+    "draw", "scheme",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -32,7 +35,7 @@ pub enum OpError {
     Engine(String),
 }
 
-fn engine<E: std::fmt::Display>(e: E) -> OpError {
+pub(crate) fn engine<E: std::fmt::Display>(e: E) -> OpError {
     OpError::Engine(e.to_string())
 }
 
@@ -88,6 +91,13 @@ struct SimulateRequest {
     network: WaterNetwork,
     #[serde(default)]
     eps: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnalysisRequest {
+    network: WaterNetwork,
+    #[serde(default)]
+    criteria: analysis::AnalysisCriteria,
 }
 
 #[derive(Debug, Deserialize)]
@@ -184,6 +194,10 @@ pub fn invoke(operation: &str, request: Value) -> Result<Value, OpError> {
             let r: SimulateRequest = serde_json::from_value(request)?;
             let steps = simulate(&r.network, r.eps)?;
             Ok(json!({ "ok": steps.iter().all(|s| s.converged), "steps": steps }))
+        }
+        "analysis" => {
+            let r: AnalysisRequest = serde_json::from_value(request)?;
+            analysis::analyse(&r.network, &r.criteria)
         }
         "layout" => {
             let r: LayoutRequest = serde_json::from_value(request)?;
@@ -454,6 +468,44 @@ mod tests {
         assert_eq!(processed["connected"], 1);
         let solved = invoke("simulate", json!({ "network": processed["network"] })).unwrap();
         assert_eq!(solved["ok"], true);
+    }
+
+    #[test]
+    fn analysis_reads_like_lv_voltage_drop() {
+        let laid = invoke(
+            "layout",
+            json!({ "features": fixture(), "options": { "crs": "EPSG:32735" } }),
+        )
+        .unwrap();
+        let designed = invoke("design", json!({ "network": laid["network"] })).unwrap();
+        let a = invoke("analysis", json!({ "network": designed["network"] })).unwrap();
+        assert_eq!(a["converged"], true);
+        let junctions = a["layers"]["water_junctions"]["features"]
+            .as_array()
+            .unwrap();
+        assert!(!junctions.is_empty());
+        for j in junctions {
+            let p = &j["properties"];
+            for column in ["p_m", "p_ok", "pd_m", "pd_pct", "pd_worst_m"] {
+                assert!(!p[column].is_null(), "{column} missing: {p}");
+            }
+            // Worst downstream is never better than here.
+            assert!(p["pd_worst_m"].as_f64().unwrap() <= p["p_m"].as_f64().unwrap() + 1e-9);
+            // Drop from the static line is never negative at peak.
+            assert!(p["pd_m"].as_f64().unwrap() >= -1e-6);
+        }
+        let path = &a["paths"][0];
+        assert!(path["worst_junction"].is_string());
+        assert_eq!(
+            a["ok"],
+            json!(
+                a["paths"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|p| p["ok"] == true)
+            )
+        );
     }
 
     #[test]
