@@ -100,6 +100,16 @@ struct LayoutRequest {
 }
 
 #[derive(Debug, Deserialize)]
+struct ProcessRequest {
+    network: WaterNetwork,
+    /// Customer points (survey, household table, buildings) as GeoJSON.
+    #[serde(default)]
+    customers: Value,
+    #[serde(default)]
+    settings: ds_water_process::ProcessSettings,
+}
+
+#[derive(Debug, Deserialize)]
 struct DesignRequest {
     network: WaterNetwork,
     #[serde(default)]
@@ -182,6 +192,14 @@ pub fn invoke(operation: &str, request: Value) -> Result<Value, OpError> {
                 &r.options,
                 r.surface.as_ref(),
             )?)?)
+        }
+        "process" => {
+            let r: ProcessRequest = serde_json::from_value(request)?;
+            Ok(serde_json::to_value(ds_water_process::process(
+                &r.network,
+                &r.customers,
+                &r.settings,
+            ))?)
         }
         "design" => {
             let r: DesignRequest = serde_json::from_value(request)?;
@@ -416,6 +434,26 @@ mod tests {
         let sheets = out["sheets"].as_array().unwrap();
         assert!(sheets.len() >= 3, "{}", sheets.len());
         assert!(sheets[0]["svg"].as_str().unwrap().starts_with("<svg"));
+    }
+
+    #[test]
+    fn processed_customers_are_served_by_the_solver() {
+        let laid = invoke(
+            "layout",
+            json!({ "features": fixture(), "options": { "crs": "EPSG:32735" } }),
+        )
+        .unwrap();
+        let customers = json!({ "type": "FeatureCollection", "features": [
+            { "type": "Feature", "properties": { "id": "H1", "demand_lps": 0.1 }, "geometry": { "type": "Point", "coordinates": [300.0, -170.0] } }
+        ]});
+        let processed = invoke(
+            "process",
+            json!({ "network": laid["network"], "customers": customers }),
+        )
+        .unwrap();
+        assert_eq!(processed["connected"], 1);
+        let solved = invoke("simulate", json!({ "network": processed["network"] })).unwrap();
+        assert_eq!(solved["ok"], true);
     }
 
     #[test]

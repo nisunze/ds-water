@@ -210,10 +210,21 @@ dependencies = [
  "ds-water-hydraulics",
  "ds-water-layout",
  "ds-water-model",
+ "ds-water-process",
  "ds-water-profile",
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "ds-water-process"
+version = "0.1.0"
+dependencies = [
+ "ds-water-layout",
+ "ds-water-model",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -18,6 +18,7 @@ ds-water-layout = { path = "crates/ds-water-layout" }
 ds-water-drawing = { path = "crates/ds-water-drawing" }
 ds-water-synth = { path = "crates/ds-water-synth" }
 ds-water-ops = { path = "crates/ds-water-ops" }
+ds-water-process = { path = "crates/ds-water-process" }
 
 # Shared with the LV and MV verticals (ds-network), read-only by path: the
 # oriented-tree primitive and the metric route sampler.

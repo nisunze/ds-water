@@ -1,0 +1,13 @@
+[package]
+name = "ds-water-process"
+description = "Water processing, after LV processing: automatic customer service connections with LV's rules and reasons, and fittings (bends, tees, reducers, end caps, tapping saddles) with a fittings BOQ."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ds-water-model.workspace = true
+ds-water-layout.workspace = true
+serde.workspace = true
+serde_json.workspace = true
