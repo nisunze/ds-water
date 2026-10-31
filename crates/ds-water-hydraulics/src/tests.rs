@@ -380,3 +380,25 @@ fn invalid_networks_refuse_to_compile() {
     n.junctions.push(junction("J", 0.0, 1.0));
     assert!(Hydraulics::new(&n).is_err());
 }
+
+#[test]
+fn a_zero_demand_static_solve_converges() {
+    let mut n = WaterNetwork::new("still");
+    n.options.demand_multiplier = 0.0;
+    n.reservoirs.push(reservoir("R", 100.0));
+    for (i, z) in [10.0, 20.0, 5.0].iter().enumerate() {
+        n.junctions.push(junction(&format!("J{i}"), *z, 1.0));
+    }
+    n.pipes.push(pipe("A", "R", "J0", 500.0, 100.0));
+    n.pipes.push(pipe("B", "J0", "J1", 500.0, 80.0));
+    n.pipes.push(pipe("C", "J1", "J2", 500.0, 80.0));
+    n.pipes.push(pipe("D", "J2", "J0", 500.0, 80.0));
+    let s = solve(&n);
+    for j in 0..3 {
+        assert!(
+            (s.head_m[j] - 100.0).abs() < 1e-6,
+            "static head {}",
+            s.head_m[j]
+        );
+    }
+}

@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use ds_terrain_sampling::{RoutePoint, SamplingOptions, SurfaceEvaluator, sample_route};
 use ds_water_hydraulics::Snapshot;
 use ds_water_layout::geo::Projection;
-use ds_water_model::WaterNetwork;
+use ds_water_model::{ValveKind, WaterNetwork};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -99,6 +99,22 @@ pub enum FittingKind {
     Washout,
     IsolationValve,
     BreakPressureTank,
+    PressureReducingValve,
+    ControlValve,
+    Pump,
+}
+
+/// What the profile needs of any link on the path.
+struct LinkView<'a> {
+    id: &'a str,
+    from: &'a str,
+    to: &'a str,
+    vertices: &'a [[f64; 2]],
+    diameter_mm: f64,
+    material: Option<String>,
+    pn_bar: Option<f64>,
+    /// Valves and pumps are marked on the profile where they sit.
+    fitting: Option<FittingKind>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -148,7 +164,7 @@ pub struct ProfileResult {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProfileError {
-    #[error("pipe {0} is not in the network")]
+    #[error("link {0} is not in the network")]
     UnknownPipe(String),
     #[error("pipes {0} and {1} do not share a node")]
     Discontinuous(String, String),
@@ -179,16 +195,52 @@ pub fn profile(
         .map(|(i, (id, _))| (id, i))
         .collect();
     let refs: Vec<_> = net.node_refs().map(|(_, r)| r).collect();
-    let pipe_index: HashMap<&str, usize> = net
+    // Links in the solver's order (pipes, pumps, valves), so a link's index
+    // is also its index in the snapshots.
+    let links: Vec<LinkView<'_>> = net
         .pipes
         .iter()
-        .enumerate()
-        .map(|(i, p)| (p.id.as_str(), i))
+        .map(|p| LinkView {
+            id: &p.id,
+            from: &p.from,
+            to: &p.to,
+            vertices: &p.vertices,
+            diameter_mm: p.diameter_mm,
+            material: p.material.clone(),
+            pn_bar: p.pressure_class_bar,
+            fitting: None,
+        })
+        .chain(net.pumps.iter().map(|p| LinkView {
+            id: &p.id,
+            from: &p.from,
+            to: &p.to,
+            vertices: &[],
+            diameter_mm: 0.0,
+            material: None,
+            pn_bar: None,
+            fitting: Some(FittingKind::Pump),
+        }))
+        .chain(net.valves.iter().map(|v| LinkView {
+            id: &v.id,
+            from: &v.from,
+            to: &v.to,
+            vertices: &[],
+            diameter_mm: v.diameter_mm,
+            material: None,
+            pn_bar: None,
+            fitting: Some(match v.kind {
+                ValveKind::Prv if v.id.starts_with("BPT") => FittingKind::BreakPressureTank,
+                ValveKind::Prv => FittingKind::PressureReducingValve,
+                _ => FittingKind::ControlValve,
+            }),
+        }))
         .collect();
+    let link_index: HashMap<&str, usize> =
+        links.iter().enumerate().map(|(i, l)| (l.id, i)).collect();
     let ks: Vec<usize> = pipes
         .iter()
         .map(|id| {
-            pipe_index
+            link_index
                 .get(id.as_str())
                 .copied()
                 .ok_or_else(|| ProfileError::UnknownPipe(id.clone()))
@@ -197,12 +249,7 @@ pub fn profile(
 
     // Orient: the first pipe starts at the end it does not share with the
     // second; a lone pipe starts at its higher static head.
-    let ends = |k: usize| {
-        (
-            node_index[net.pipes[k].from.as_str()],
-            node_index[net.pipes[k].to.as_str()],
-        )
-    };
+    let ends = |k: usize| (node_index[links[k].from], node_index[links[k].to]);
     let mut start = {
         let (a, b) = ends(ks[0]);
         match ks.get(1).map(|&k2| ends(k2)) {
@@ -213,9 +260,9 @@ pub fn profile(
         }
     };
     let mut degree = vec![0usize; refs.len()];
-    for p in &net.pipes {
-        degree[node_index[p.from.as_str()]] += 1;
-        degree[node_index[p.to.as_str()]] += 1;
+    for l in &links {
+        degree[node_index[l.from]] += 1;
+        degree[node_index[l.to]] += 1;
     }
 
     // Route polyline in source coordinates, with node positions.
@@ -236,7 +283,7 @@ pub fn profile(
             ));
         };
         let first = route.len() - 1;
-        let mut verts = net.pipes[k].vertices.clone();
+        let mut verts = links[k].vertices.to_vec();
         if !forward {
             verts.reverse();
         }
@@ -306,10 +353,6 @@ pub fn profile(
         }
         legs.last().map(|l| elevation(l.2)).unwrap_or(0.0)
     };
-    let mut chainages: Vec<f64> = chain.clone();
-    chainages.extend(stations.iter().map(|s| s.0));
-    chainages.sort_by(f64::total_cmp);
-    chainages.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
     let ground_at = |c: f64| -> f64 {
         if stations.is_empty() {
             return leg_ground(c);
@@ -325,8 +368,8 @@ pub fn profile(
 
     let mut segments = Vec::new();
     for &(k, from, to, first, last) in &legs {
-        let p = &net.pipes[k];
-        let forward = node_index[p.from.as_str()] == from;
+        let p = &links[k];
+        let forward = node_index[p.from] == from;
         let q = if forward {
             peak.flow_lps[k]
         } else {
@@ -334,46 +377,62 @@ pub fn profile(
         };
         let span = (chain[last] - chain[first]).max(1e-9);
         segments.push(ProfileSegment {
-            pipe: p.id.clone(),
+            pipe: p.id.to_owned(),
             from_node: id_of(net, from),
             to_node: id_of(net, to),
             start_m: chain[first],
             end_m: chain[last],
             internal_mm: p.diameter_mm,
             material: p.material.clone(),
-            pn_bar: p.pressure_class_bar,
+            pn_bar: p.pn_bar,
             flow_lps: q,
             velocity_ms: peak.velocity_ms[k],
             hgl_gradient_m_per_km: (peak.head_m[from] - peak.head_m[to]) / span * 1000.0,
         });
     }
 
-    let mut points = Vec::with_capacity(chainages.len());
-    for &c in &chainages {
-        let s = legs
-            .iter()
-            .position(|&(_, _, _, _, last)| c <= chain[last] + 1e-9)
-            .unwrap_or(legs.len() - 1);
-        let (k, from, to, first, last) = legs[s];
-        let span = (chain[last] - chain[first]).max(1e-9);
-        let t = ((c - chain[first]) / span).clamp(0.0, 1.0);
-        let ground = ground_at(c);
-        let outside = net.pipes[k].diameter_mm * 1.12 / 1000.0;
-        let centre = ground - opts.cover_m - outside / 2.0;
-        let hgl = peak.head_m[from] + t * (peak.head_m[to] - peak.head_m[from]);
-        let stat = still.head_m[from] + t * (still.head_m[to] - still.head_m[from]);
-        let at = interpolate(&route, &chain, c);
-        points.push(ProfilePoint {
-            chainage_m: c,
-            ground_m: ground,
-            centre_m: centre,
-            hgl_m: hgl,
-            static_m: stat,
-            pressure_m: hgl - centre,
-            static_pressure_m: stat - centre,
-            at,
-            segment: s,
-        });
+    // Points leg by leg, so the two ends of a valve or pump (same chainage)
+    // keep their own heads and the grade lines step there.
+    let mut points = Vec::new();
+    for (s, &(k, from, to, first, last)) in legs.iter().enumerate() {
+        let span = chain[last] - chain[first];
+        let mut cs: Vec<(f64, f64)> = if span < 1e-6 {
+            vec![(chain[first], 0.0), (chain[first], 1.0)]
+        } else {
+            let mut cs: Vec<f64> = chain[first..=last].to_vec();
+            cs.extend(
+                stations
+                    .iter()
+                    .map(|st| st.0)
+                    .filter(|&c| c > chain[first] + 1e-6 && c < chain[last] - 1e-6),
+            );
+            cs.sort_by(f64::total_cmp);
+            cs.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+            cs.into_iter()
+                .map(|c| (c, (c - chain[first]) / span))
+                .collect()
+        };
+        if s > 0 && span >= 1e-6 {
+            cs.remove(0); // the previous leg already ends here
+        }
+        for (c, t) in cs {
+            let ground = ground_at(c);
+            let outside = links[k].diameter_mm * 1.12 / 1000.0;
+            let centre = ground - opts.cover_m - outside / 2.0;
+            let hgl = peak.head_m[from] + t * (peak.head_m[to] - peak.head_m[from]);
+            let stat = still.head_m[from] + t * (still.head_m[to] - still.head_m[from]);
+            points.push(ProfilePoint {
+                chainage_m: c,
+                ground_m: ground,
+                centre_m: centre,
+                hgl_m: hgl,
+                static_m: stat,
+                pressure_m: hgl - centre,
+                static_pressure_m: stat - centre,
+                at: interpolate(&route, &chain, c),
+                segment: s,
+            });
+        }
     }
 
     let nodes: Vec<NodeMark> = route_node
@@ -391,6 +450,16 @@ pub fn profile(
 
     let mut fittings = Vec::new();
     peaks_and_sags(&points, opts.prominence_m, &mut fittings);
+    for &(k, _, _, first, _) in &legs {
+        if let Some(kind) = links[k].fitting {
+            fittings.push(Fitting {
+                kind,
+                chainage_m: chain[first],
+                elevation_m: ground_at(chain[first]),
+                reason: format!("{} in the network", links[k].id),
+            });
+        }
+    }
     for node in &nodes {
         if node.tee {
             fittings.push(Fitting {
@@ -422,9 +491,10 @@ pub fn profile(
     fittings.sort_by(|a, b| a.chainage_m.total_cmp(&b.chainage_m));
 
     let mut findings = Vec::new();
-    let junction_at: Vec<bool> = chainages
+    let junction_at: Vec<bool> = points
         .iter()
-        .map(|&c| {
+        .map(|p| p.chainage_m)
+        .map(|c| {
             nodes.iter().any(|n| {
                 (n.chainage_m - c).abs() < 1e-6 && net.junctions.iter().any(|j| j.id == n.id)
             })

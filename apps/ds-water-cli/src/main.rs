@@ -243,12 +243,25 @@ fn run(command: Command) -> Result<Value> {
                 json!({ "ok": true, "name": n.name, "junctions": n.junctions.len(), "links": n.link_count(), "out": out }),
             )
         }
-        Command::Layout { features, options, surface, out } => {
+        Command::Layout {
+            features,
+            options,
+            surface,
+            out,
+        } => {
             let opts: ds_water_layout::LayoutOptions = read_json_or_default(options.as_deref())?;
-            let grid = surface.as_deref().map(surface::AsciiGrid::read).transpose()?;
+            let grid = surface
+                .as_deref()
+                .map(surface::AsciiGrid::read)
+                .transpose()?;
             let fc: Value = serde_json::from_str(&std::fs::read_to_string(&features)?)?;
             let at = |p: [f64; 2]| grid.as_ref().and_then(|g| g.at(p));
-            let r = ds_water_layout::layout(&fc, &opts, grid.as_ref().map(|_| &at as &dyn Fn([f64; 2]) -> Option<f64>))?;
+            let r = ds_water_layout::layout(
+                &fc,
+                &opts,
+                grid.as_ref()
+                    .map(|_| &at as &dyn Fn([f64; 2]) -> Option<f64>),
+            )?;
             std::fs::write(&out, r.network.to_json())?;
             Ok(json!({
                 "ok": true,
@@ -263,9 +276,16 @@ fn run(command: Command) -> Result<Value> {
                 "out": out,
             }))
         }
-        Command::Design { network, criteria, catalogue, out, report } => {
+        Command::Design {
+            network,
+            criteria,
+            catalogue,
+            out,
+            report,
+        } => {
             let n = read_network(&network)?;
-            let criteria: ds_water_design::DesignCriteria = read_json_or_default(criteria.as_deref())?;
+            let criteria: ds_water_design::DesignCriteria =
+                read_json_or_default(criteria.as_deref())?;
             let catalogue = match catalogue {
                 Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
                 None => ds_water_design::Catalogue::standard(),
@@ -277,11 +297,25 @@ fn run(command: Command) -> Result<Value> {
             }
             Ok(design_summary(&r))
         }
-        Command::Profile { network, path, pipes, surface, options, out } => {
+        Command::Profile {
+            network,
+            path,
+            pipes,
+            surface,
+            options,
+            out,
+        } => {
             let n = read_network(&network)?;
             let opts: ds_water_profile::ProfileOptions = read_json_or_default(options.as_deref())?;
-            let grid = surface.as_deref().map(surface::AsciiGrid::read).transpose()?;
-            let pipes = if pipes.is_empty() { path_pipes(&n, &path)? } else { pipes };
+            let grid = surface
+                .as_deref()
+                .map(surface::AsciiGrid::read)
+                .transpose()?;
+            let pipes = if pipes.is_empty() {
+                path_pipes(&n, &path)?
+            } else {
+                pipes
+            };
             let p = run_profile(&n, &pipes, grid.as_ref(), &opts)?;
             if let Some(out) = &out {
                 std::fs::write(out, serde_json::to_vec_pretty(&p)?)?;
@@ -295,25 +329,64 @@ fn run(command: Command) -> Result<Value> {
                 "out": out,
             }))
         }
-        Command::Draw { network, out_dir, sheets } => {
+        Command::Draw {
+            network,
+            out_dir,
+            sheets,
+        } => {
             let n = read_network(&network)?;
             let boq = boq_as_is(&n);
-            draw_set(&n, &boq, &ds_water_design::DesignCriteria::default(), &out_dir, &sheets)
+            draw_set(
+                &n,
+                &boq,
+                &ds_water_design::DesignCriteria::default(),
+                &out_dir,
+                &sheets,
+            )
         }
-        Command::Scheme { features, out_dir, options, criteria, sheets } => {
+        Command::Scheme {
+            features,
+            out_dir,
+            options,
+            criteria,
+            sheets,
+        } => {
             std::fs::create_dir_all(&out_dir)?;
             let opts: ds_water_layout::LayoutOptions = read_json_or_default(options.as_deref())?;
-            let criteria: ds_water_design::DesignCriteria = read_json_or_default(criteria.as_deref())?;
-            let grid = sheets.surface.as_deref().map(surface::AsciiGrid::read).transpose()?;
+            let criteria: ds_water_design::DesignCriteria =
+                read_json_or_default(criteria.as_deref())?;
+            let grid = sheets
+                .surface
+                .as_deref()
+                .map(surface::AsciiGrid::read)
+                .transpose()?;
             let fc: Value = serde_json::from_str(&std::fs::read_to_string(&features)?)?;
             let at = |p: [f64; 2]| grid.as_ref().and_then(|g| g.at(p));
-            let laid = ds_water_layout::layout(&fc, &opts, grid.as_ref().map(|_| &at as &dyn Fn([f64; 2]) -> Option<f64>))?;
+            let laid = ds_water_layout::layout(
+                &fc,
+                &opts,
+                grid.as_ref()
+                    .map(|_| &at as &dyn Fn([f64; 2]) -> Option<f64>),
+            )?;
             std::fs::write(out_dir.join("layout.json"), laid.network.to_json())?;
-            let designed = ds_water_design::design(&laid.network, &ds_water_design::Catalogue::standard(), &criteria)?;
+            let designed = ds_water_design::design(
+                &laid.network,
+                &ds_water_design::Catalogue::standard(),
+                &criteria,
+            )?;
             std::fs::write(out_dir.join("network.json"), designed.network.to_json())?;
             std::fs::write(out_dir.join("network.inp"), inp::write(&designed.network))?;
-            std::fs::write(out_dir.join("design.json"), serde_json::to_vec_pretty(&designed)?)?;
-            let drawings = draw_set(&designed.network, &designed.boq, &criteria, &out_dir, &sheets)?;
+            std::fs::write(
+                out_dir.join("design.json"),
+                serde_json::to_vec_pretty(&designed)?,
+            )?;
+            let drawings = draw_set(
+                &designed.network,
+                &designed.boq,
+                &criteria,
+                &out_dir,
+                &sheets,
+            )?;
             Ok(json!({
                 "ok": true,
                 "layout": { "mode": laid.mode, "unserved": laid.unserved, "notes": laid.notes },
@@ -410,9 +483,13 @@ fn results_document(n: &WaterNetwork, snapshots: &[Snapshot]) -> Value {
     })
 }
 
-fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(path: Option<&Path>) -> Result<T> {
+fn read_json_or_default<T: serde::de::DeserializeOwned + Default>(
+    path: Option<&Path>,
+) -> Result<T> {
     match path {
-        Some(p) => Ok(serde_json::from_str(&std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?)?),
+        Some(p) => Ok(serde_json::from_str(
+            &std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?,
+        )?),
         None => Ok(T::default()),
     }
 }
@@ -447,12 +524,23 @@ fn run_profile(
     grid: Option<&surface::AsciiGrid>,
     opts: &ds_water_profile::ProfileOptions,
 ) -> Result<ds_water_profile::ProfileResult> {
-    let peak = Hydraulics::new(n).map_err(|e| anyhow::anyhow!("{e}"))?.solve(0, &Hydraulics::initial_tank_levels(n));
+    let peak = Hydraulics::new(n)
+        .map_err(|e| anyhow::anyhow!("{e}"))?
+        .solve(0, &Hydraulics::initial_tank_levels(n));
     let mut still_net = n.clone();
     still_net.options.demand_multiplier = 0.0;
-    let still = Hydraulics::new(&still_net).map_err(|e| anyhow::anyhow!("{e}"))?.solve(0, &Hydraulics::initial_tank_levels(n));
+    let still = Hydraulics::new(&still_net)
+        .map_err(|e| anyhow::anyhow!("{e}"))?
+        .solve(0, &Hydraulics::initial_tank_levels(n));
     let at = |p: [f64; 2]| grid.and_then(|g| g.at(p));
-    Ok(ds_water_profile::profile(n, pipes, &peak, &still, grid.map(|_| &at as &dyn Fn([f64; 2]) -> Option<f64>), opts)?)
+    Ok(ds_water_profile::profile(
+        n,
+        pipes,
+        &peak,
+        &still,
+        grid.map(|_| &at as &dyn Fn([f64; 2]) -> Option<f64>),
+        opts,
+    )?)
 }
 
 /// Quantities of a network drawn as it is (no design run, no costs).
@@ -461,9 +549,18 @@ fn boq_as_is(n: &WaterNetwork) -> Vec<ds_water_design::BoqLine> {
     for p in &n.pipes {
         let material = p.material.clone().unwrap_or_else(|| "pipe".into());
         let pn = p.pressure_class_bar.unwrap_or(0.0);
-        match out.iter_mut().find(|b| b.material == material && b.nominal_mm == p.diameter_mm && b.pn_bar == pn) {
+        match out
+            .iter_mut()
+            .find(|b| b.material == material && b.nominal_mm == p.diameter_mm && b.pn_bar == pn)
+        {
             Some(b) => b.length_m += p.length_m,
-            None => out.push(ds_water_design::BoqLine { material, nominal_mm: p.diameter_mm, pn_bar: pn, length_m: p.length_m, cost: 0.0 }),
+            None => out.push(ds_water_design::BoqLine {
+                material,
+                nominal_mm: p.diameter_mm,
+                pn_bar: pn,
+                length_m: p.length_m,
+                cost: 0.0,
+            }),
         }
     }
     out
@@ -476,7 +573,9 @@ fn draw_set(
     out_dir: &Path,
     args: &SheetArgs,
 ) -> Result<Value> {
-    use ds_water_drawing::{DrawingOptions, TitleInfo, network_plan_sheet, plan_profile_sheets, schedules_sheet};
+    use ds_water_drawing::{
+        DrawingOptions, TitleInfo, network_plan_sheet, plan_profile_sheets, schedules_sheet,
+    };
     std::fs::create_dir_all(out_dir)?;
     let mut info: TitleInfo = read_json_or_default(args.title.as_deref())?;
     if info.project.is_empty() {
@@ -486,7 +585,11 @@ fn draw_set(
         info.drawing_prefix = "WS".into();
     }
     let opts = DrawingOptions::default();
-    let grid = args.surface.as_deref().map(surface::AsciiGrid::read).transpose()?;
+    let grid = args
+        .surface
+        .as_deref()
+        .map(surface::AsciiGrid::read)
+        .transpose()?;
     let profile_opts = ds_water_profile::ProfileOptions {
         min_pressure_m: criteria.min_pressure_m,
         max_static_pressure_m: criteria.max_static_pressure_m,
@@ -496,20 +599,43 @@ fn draw_set(
     paths.retain(|p| p.length_m >= args.min_path_m);
     paths.sort_by(|a, b| b.length_m.total_cmp(&a.length_m));
     paths.truncate(args.paths);
-    let mut sheets = vec![network_plan_sheet(n, &info, &opts, &format!("{}-001", info.drawing_prefix))];
+    let mut sheets = vec![network_plan_sheet(
+        n,
+        &info,
+        &opts,
+        &format!("{}-001", info.drawing_prefix),
+    )];
     let mut profiles = Vec::new();
     for path in &paths {
         let p = run_profile(n, &path.pipes, grid.as_ref(), &profile_opts)?;
-        sheets.extend(plan_profile_sheets(n, &p, &path.label, &info, &opts, sheets.len() + 1));
+        sheets.extend(plan_profile_sheets(
+            n,
+            &p,
+            &path.label,
+            &info,
+            &opts,
+            sheets.len() + 1,
+        ));
         profiles.push((path.label.clone(), p));
     }
-    let refs: Vec<(String, &ds_water_profile::ProfileResult)> = profiles.iter().map(|(l, p)| (l.clone(), p)).collect();
-    sheets.push(schedules_sheet(boq, &refs, criteria, &info, &opts, &format!("{}-{:03}", info.drawing_prefix, sheets.len() + 1)));
+    let refs: Vec<(String, &ds_water_profile::ProfileResult)> =
+        profiles.iter().map(|(l, p)| (l.clone(), p)).collect();
+    sheets.push(schedules_sheet(
+        boq,
+        &refs,
+        criteria,
+        &info,
+        &opts,
+        &format!("{}-{:03}", info.drawing_prefix, sheets.len() + 1),
+    ));
     for s in &sheets {
         std::fs::write(out_dir.join(format!("{}.svg", s.number)), &s.svg)?;
     }
     for (label, p) in &profiles {
-        std::fs::write(out_dir.join(format!("profile-{label}.json")), serde_json::to_vec_pretty(p)?)?;
+        std::fs::write(
+            out_dir.join(format!("profile-{label}.json")),
+            serde_json::to_vec_pretty(p)?,
+        )?;
     }
     Ok(json!({
         "sheets": sheets.iter().map(|s| json!({ "number": s.number, "title": s.title })).collect::<Vec<_>>(),

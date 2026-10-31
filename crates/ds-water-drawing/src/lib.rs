@@ -733,6 +733,25 @@ fn fitting_symbol(doc: &mut Svg, kind: FittingKind, x: f64, y: f64) {
             doc.rect(x - 2.0, y - 4.0, 4.0, 4.0, "#e8f3fb", "#111", MEDIUM);
             doc.text(x, y - 5.0, 2.0, Anchor::Middle, "bold", "BPT");
         }
+        FittingKind::PressureReducingValve | FittingKind::ControlValve => {
+            doc.rect(x - 1.8, y - 1.8, 3.6, 3.6, "#fff", "#111", MEDIUM);
+            doc.polygon(
+                &[[x - 1.2, y - 1.2], [x + 1.2, y - 1.2], [x, y + 1.2]],
+                "#111",
+                "#111",
+                THIN,
+            );
+            let label = if kind == FittingKind::PressureReducingValve {
+                "PRV"
+            } else {
+                "CV"
+            };
+            doc.text(x, y - 2.8, 2.0, Anchor::Middle, "bold", label);
+        }
+        FittingKind::Pump => {
+            doc.circle(x, y, 2.0, "#fff", "#111", MEDIUM);
+            doc.text(x, y + 0.8, 2.2, Anchor::Middle, "bold", "P");
+        }
     }
 }
 
@@ -1054,6 +1073,9 @@ pub fn schedules_sheet(
                 FittingKind::Washout => "Washout",
                 FittingKind::IsolationValve => "Isolation valve",
                 FittingKind::BreakPressureTank => "Break-pressure tank",
+                FittingKind::PressureReducingValve => "Pressure-reducing valve",
+                FittingKind::ControlValve => "Control valve",
+                FittingKind::Pump => "Pump",
             };
             for (c, v) in [0.0, 22.0, 52.0, 80.0].iter().zip([
                 label.clone(),

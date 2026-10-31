@@ -23,6 +23,7 @@
 //! sizing can replace step 3 behind the same request and result.
 
 pub mod catalogue;
+pub mod zoning;
 
 use std::collections::HashMap;
 
@@ -31,12 +32,15 @@ use ds_water_model::{HeadlossFormula, WaterNetwork};
 use serde::{Deserialize, Serialize};
 
 pub use catalogue::{Catalogue, CatalogueItem};
+pub use zoning::{BreakPressureTank, ZoneDevice, insert_break_pressure_tanks};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesignCriteria {
-    /// Minimum residual pressure at peak demand, m.
+    /// Minimum residual pressure at peak demand where water is drawn, m.
     pub min_pressure_m: f64,
+    /// Minimum pressure at junctions without demand (tees, tank inlets), m.
+    pub min_pressure_without_demand_m: f64,
     /// Static pressure above which a junction needs a PRV or break-pressure
     /// tank, m.
     pub max_static_pressure_m: f64,
@@ -52,12 +56,22 @@ pub struct DesignCriteria {
     pub fixed_pipes: Vec<String>,
     /// Upper bound on hydraulic solves.
     pub max_simulations: u32,
+    /// Insert break-pressure tanks before sizing so static pressure stays
+    /// under `max_static_pressure_m` (the usual answer on gravity schemes).
+    pub break_pressure_tanks: bool,
+    /// Water depth held in a break-pressure tank, m.
+    pub bpt_depth_m: f64,
+    /// What the inserted zone boundaries are.
+    pub zone_device: ZoneDevice,
+    /// Outlet setting of an inserted PRV, m (minimum pressure plus margin).
+    pub zone_prv_pressure_m: f64,
 }
 
 impl Default for DesignCriteria {
     fn default() -> Self {
         Self {
             min_pressure_m: 10.0,
+            min_pressure_without_demand_m: 0.0,
             max_static_pressure_m: 80.0,
             max_velocity_ms: 2.0,
             min_velocity_ms: 0.3,
@@ -66,6 +80,10 @@ impl Default for DesignCriteria {
             materials: Vec::new(),
             fixed_pipes: Vec::new(),
             max_simulations: 400,
+            break_pressure_tanks: true,
+            bpt_depth_m: 1.5,
+            zone_device: ZoneDevice::PressureReducingValve,
+            zone_prv_pressure_m: 25.0,
         }
     }
 }
@@ -113,11 +131,15 @@ pub struct DesignResult {
     pub min_pressure: Option<NodePressure>,
     /// Junctions still below the minimum pressure.
     pub infeasible: Vec<NodePressure>,
+    /// Junctions whose static pressure alone is below their requirement.
+    pub static_deficit: Vec<NodePressure>,
     /// Junctions whose static pressure exceeds the limit.
     pub over_pressure: Vec<NodePressure>,
     pub low_velocity_pipes: Vec<String>,
     pub simulations: u32,
     pub upgrades: u32,
+    /// Break-pressure tanks the design inserted.
+    pub break_pressure_tanks: Vec<BreakPressureTank>,
     pub warnings: Vec<String>,
 }
 
@@ -154,7 +176,23 @@ pub fn design(
     catalogue: &Catalogue,
     criteria: &DesignCriteria,
 ) -> Result<DesignResult, DesignError> {
-    let mut net = network.clone();
+    let (mut net, break_pressure_tanks) = if criteria.break_pressure_tanks {
+        insert_break_pressure_tanks(
+            network,
+            criteria.max_static_pressure_m,
+            // 10 % margin: zoning interpolates ground between nodes; the
+            // profile samples the real ground, which dips in between.
+            0.9,
+            match criteria.zone_device {
+                ZoneDevice::PressureReducingValve => criteria.zone_prv_pressure_m,
+                ZoneDevice::BreakPressureTank => criteria.bpt_depth_m,
+            },
+            criteria.min_pressure_m,
+            criteria.zone_device,
+        )
+    } else {
+        (network.clone(), Vec::new())
+    };
     let mut cx = Context {
         hazen: net.options.headloss == HeadlossFormula::HazenWilliams,
         simulations: 0,
@@ -265,23 +303,64 @@ pub fn design(
         node_links[a].push(k);
         node_links[b].push(k);
     }
+    let required: Vec<f64> = net
+        .junctions
+        .iter()
+        .map(|j| {
+            if j.demand_lps > 0.0 {
+                criteria.min_pressure_m
+            } else {
+                criteria.min_pressure_without_demand_m
+            }
+        })
+        .collect();
     let mut upgrades = 0;
-    let mut given_up: Vec<bool> = vec![false; nj];
+    // A junction whose static pressure is already below its requirement
+    // cannot be helped by any pipe size: report it at once (it needs a tank
+    // moved, a higher source or a booster) instead of chasing it.
+    let mut given_up: Vec<bool> = (0..nj)
+        .map(|j| {
+            !static_snapshot.disconnected.contains(&j)
+                && static_snapshot.pressure_m[j] < required[j] - 1e-6
+        })
+        .collect();
+    let static_deficit: Vec<NodePressure> = (0..nj)
+        .filter(|&j| given_up[j])
+        .map(|j| NodePressure {
+            id: net.junctions[j].id.clone(),
+            pressure_m: static_snapshot.pressure_m[j],
+        })
+        .collect();
+    if !static_deficit.is_empty() {
+        cx.warnings.push(format!(
+            "{} junctions sit too high for their source or tank (static pressure below the minimum)",
+            static_deficit.len()
+        ));
+    }
     let mut snapshot = cx.solve(&net)?;
     while cx.simulations < criteria.max_simulations {
         let critical = (0..nj)
             .filter(|&j| !given_up[j] && !snapshot.disconnected.contains(&j))
-            .filter(|&j| snapshot.pressure_m[j] < criteria.min_pressure_m - 1e-6)
-            .min_by(|&a, &b| snapshot.pressure_m[a].total_cmp(&snapshot.pressure_m[b]));
+            .filter(|&j| snapshot.pressure_m[j] < required[j] - 1e-6)
+            .min_by(|&a, &b| {
+                (snapshot.pressure_m[a] - required[a])
+                    .total_cmp(&(snapshot.pressure_m[b] - required[b]))
+            });
         let Some(critical) = critical else { break };
-        let deficit = criteria.min_pressure_m - snapshot.pressure_m[critical];
+        let deficit = required[critical] - snapshot.pressure_m[critical];
         let path = supply_path(critical, nj, &ends, &node_links, &snapshot);
         let mut gained = 0.0;
         let mut any = false;
+        // One size step per pipe per round: an undersized system can show
+        // deficits far larger than the final one, and chasing them in one
+        // go oversizes the first pipes it meets.
+        let mut stepped: Vec<usize> = Vec::new();
         while gained < deficit {
             let best = path
                 .iter()
-                .filter(|&&k| !fixed[k] && choice[k] + 1 < options[k].len())
+                .filter(|&&k| {
+                    !fixed[k] && !stepped.contains(&k) && choice[k] + 1 < options[k].len()
+                })
                 .map(|&k| {
                     let q = snapshot.flow_lps[k].abs() / 1000.0;
                     let (now, next) = (&options[k][choice[k]], &options[k][choice[k] + 1]);
@@ -295,6 +374,7 @@ pub fn design(
             let Some((k, gain, _)) = best else { break };
             choice[k] += 1;
             apply(&mut net, k, &options[k][choice[k]], cx.hazen);
+            stepped.push(k);
             gained += gain;
             upgrades += 1;
             any = true;
@@ -323,7 +403,7 @@ pub fn design(
         .map(junction);
     let infeasible: Vec<NodePressure> = connected
         .clone()
-        .filter(|&j| snapshot.pressure_m[j] < criteria.min_pressure_m - 1e-6)
+        .filter(|&j| snapshot.pressure_m[j] < required[j] - 1e-6)
         .map(junction)
         .collect();
     let over_pressure: Vec<NodePressure> = (0..nj)
@@ -405,10 +485,12 @@ pub fn design(
         total_cost,
         min_pressure,
         infeasible,
+        static_deficit,
         over_pressure,
         low_velocity_pipes,
         simulations: cx.simulations,
         upgrades,
+        break_pressure_tanks,
         warnings: cx.warnings,
     })
 }

@@ -91,6 +91,7 @@ pub struct PathSummary {
     pub tip: String,
     pub length_m: f64,
     pub nodes: Vec<String>,
+    /// Links root → tip: pipes, and any valves or pumps on the way.
     pub pipes: Vec<String>,
 }
 
@@ -1014,15 +1015,34 @@ pub fn orient(net: &WaterNetwork) -> Result<Vec<PathSummary>, LayoutError> {
     if sources.is_empty() {
         return Err(LayoutError::NoSource);
     }
+    // Every link kind joins the tree, so a path runs through valves (a
+    // break-pressure tank is one) and pumps as it does through pipes. They
+    // get a nominal millimetre: the graph primitive treats a zero-length
+    // edge as no connection.
+    const POINT_LINK_M: f64 = 0.001;
+    let links: Vec<(&str, &str, f64, &str)> = net
+        .pipes
+        .iter()
+        .map(|p| (p.from.as_str(), p.to.as_str(), p.length_m, p.id.as_str()))
+        .chain(
+            net.pumps
+                .iter()
+                .map(|p| (p.from.as_str(), p.to.as_str(), POINT_LINK_M, p.id.as_str())),
+        )
+        .chain(
+            net.valves
+                .iter()
+                .map(|v| (v.from.as_str(), v.to.as_str(), POINT_LINK_M, v.id.as_str())),
+        )
+        .collect();
     let input = ds_graph::BuildInput {
         nodes,
-        edges: net
-            .pipes
+        edges: links
             .iter()
-            .map(|p| ds_graph::GraphEdge {
-                a: p.from.clone(),
-                b: p.to.clone(),
-                length_m: p.length_m,
+            .map(|&(a, b, length_m, _)| ds_graph::GraphEdge {
+                a: a.to_owned(),
+                b: b.to_owned(),
+                length_m,
             })
             .collect(),
         sources,
@@ -1040,7 +1060,7 @@ pub fn orient(net: &WaterNetwork) -> Result<Vec<PathSummary>, LayoutError> {
             pipes: p
                 .member_edges
                 .iter()
-                .map(|&e| net.pipes[e].id.clone())
+                .map(|&e| links[e].3.to_owned())
                 .collect(),
         })
         .collect())

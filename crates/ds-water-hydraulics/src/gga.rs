@@ -24,7 +24,10 @@ const CBIG: f64 = 1e8;
 /// Weight that pins a head for an active pressure valve.
 const BIG: f64 = 1e10;
 const HTOL: f64 = 1.5e-4;
-const QTOL: f64 = 1e-7;
+/// Flow below which a link is treated as stopped for status decisions
+/// (EPANET's 1e-4 cfs): solver noise in still zones stays under it.
+const QTOL: f64 = 2.8e-6;
+const QFLOOR: f64 = 1e-6;
 const CHECK_EVERY: u32 = 2;
 const CHECK_UNTIL: u32 = 10;
 
@@ -531,6 +534,7 @@ impl Hydraulics {
 
             let mut sum_dq = 0.0;
             let mut sum_q = 0.0;
+            let mut max_dq: f64 = 0.0;
             for (k, link) in self.links.iter().enumerate() {
                 if p_coef[k] == 0.0 {
                     continue;
@@ -538,6 +542,7 @@ impl Hydraulics {
                 let (i, j) = (link.from, link.to);
                 let new = flow[k] - y_coef[k] + p_coef[k] * (head[i] - head[j]);
                 sum_dq += (new - flow[k]).abs();
+                max_dq = max_dq.max((new - flow[k]).abs());
                 sum_q += new.abs();
                 flow[k] = new;
             }
@@ -568,6 +573,7 @@ impl Hydraulics {
                 }
                 let new = if sign > 0.0 { out } else { -out };
                 sum_dq += (new - flow[k]).abs();
+                max_dq = max_dq.max((new - flow[k]).abs());
                 sum_q += new.abs();
                 flow[k] = new;
             }
@@ -579,13 +585,18 @@ impl Hydraulics {
                     let (p, y) = pda_coef[j];
                     let new = delivered[j] - y + p * (head[j] - self.elevation[j] - p_min);
                     sum_dq += (new - delivered[j]).abs();
+                    max_dq = max_dq.max((new - delivered[j]).abs());
                     sum_q += new.abs();
                     delivered[j] = new;
                 }
             }
-            relative = if sum_q > 0.0 { sum_dq / sum_q } else { 0.0 };
+            // A floor of 1 mL/s on the total flow: with no demand every flow
+            // tends to zero and the plain ratio would never settle.
+            relative = sum_dq / sum_q.max(QFLOOR);
 
-            let flows_converged = relative <= self.options.accuracy;
+            // Or every flow moved by less than the stopped-flow
+            // tolerance: what is left is round-off in still zones.
+            let flows_converged = relative <= self.options.accuracy || max_dq <= QTOL;
             let check_now =
                 flows_converged || (iterations <= CHECK_UNTIL && iterations % CHECK_EVERY == 0);
             if check_now {

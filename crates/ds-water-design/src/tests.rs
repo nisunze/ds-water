@@ -77,7 +77,11 @@ fn sizes_a_branched_gravity_scheme_to_criteria() {
 #[test]
 fn pressure_class_covers_static_head_and_surge() {
     let net = scheme(150.0, 3);
-    let r = design(&net, &Catalogue::standard(), &DesignCriteria::default()).unwrap();
+    let criteria = DesignCriteria {
+        break_pressure_tanks: false,
+        ..DesignCriteria::default()
+    };
+    let r = design(&net, &Catalogue::standard(), &criteria).unwrap();
     for p in &r.pipes {
         assert!(
             p.pn_bar * 10.197 + 1e-6 >= p.design_head_m,
@@ -126,4 +130,106 @@ fn rated_items_form_a_cost_frontier() {
     );
     let pe_only = cat.rated(&["HDPE PE100".into()], 0.0);
     assert!(pe_only.iter().all(|i| i.material == "HDPE PE100"));
+}
+
+/// A spring 400 m above a valley village, 6 km of main falling steadily.
+fn steep_main() -> WaterNetwork {
+    let mut n = WaterNetwork::new("steep");
+    n.reservoirs.push(Reservoir {
+        id: "Spring".into(),
+        head_m: 2000.0,
+        x: Some(0.0),
+        y: Some(0.0),
+        ..Reservoir::default()
+    });
+    let mut prev = "Spring".to_owned();
+    for i in 1..=6 {
+        let id = format!("J{i}");
+        n.junctions.push(Junction {
+            id: id.clone(),
+            elevation_m: 2000.0 - 66.0 * i as f64,
+            demand_lps: if i == 6 { 3.0 } else { 0.0 },
+            x: Some(i as f64 * 1000.0),
+            y: Some(0.0),
+            ..Junction::default()
+        });
+        n.pipes.push(Pipe {
+            id: format!("P{i}"),
+            from: prev,
+            to: id.clone(),
+            length_m: 1000.0,
+            diameter_mm: 50.0,
+            roughness: 150.0,
+            vertices: vec![[i as f64 * 1000.0 - 500.0, 10.0]],
+            ..Pipe::default()
+        });
+        prev = id;
+    }
+    n
+}
+
+#[test]
+fn break_pressure_tanks_keep_static_pressure_under_the_limit() {
+    let criteria = DesignCriteria {
+        zone_device: ZoneDevice::BreakPressureTank,
+        ..DesignCriteria::default()
+    };
+    let r = design(&steep_main(), &Catalogue::standard(), &criteria).unwrap();
+    // 396 m of fall with an 80 m limit at 95 %: five tanks.
+    assert_eq!(
+        r.break_pressure_tanks.len(),
+        5,
+        "{:?}",
+        r.break_pressure_tanks
+    );
+    assert!(r.over_pressure.is_empty(), "{:?}", r.over_pressure);
+    assert!(r.infeasible.is_empty(), "{:?}", r.infeasible);
+    let mut still = r.network.clone();
+    still.options.demand_multiplier = 0.0;
+    let s = ds_water_hydraulics::Hydraulics::new(&still)
+        .unwrap()
+        .solve(0, &[]);
+    assert!(s.converged);
+    for (j, junction) in r.network.junctions.iter().enumerate() {
+        assert!(
+            s.pressure_m[j] <= 80.0 + 1e-6,
+            "{} static {}",
+            junction.id,
+            s.pressure_m[j]
+        );
+    }
+    // Tanks lower the classes: nothing above PN10 is needed for 80 m + 20 %.
+    assert!(
+        r.pipes.iter().all(|p| p.pn_bar <= 10.0 + 1e-9),
+        "{:?}",
+        r.pipes.iter().map(|p| p.pn_bar).collect::<Vec<_>>()
+    );
+    // Every split pipe keeps its total length.
+    let total: f64 = r.network.pipes.iter().map(|p| p.length_m).sum();
+    assert!((total - 6000.0).abs() < 1e-6);
+    // The path still runs source to tip through the tanks.
+    let valves = r
+        .network
+        .valves
+        .iter()
+        .filter(|v| v.id.starts_with("BPT"))
+        .count();
+    assert_eq!(valves, 5);
+}
+
+#[test]
+fn prv_zones_keep_consumers_below_them_in_pressure() {
+    let r = design(
+        &steep_main(),
+        &Catalogue::standard(),
+        &DesignCriteria::default(),
+    )
+    .unwrap();
+    assert!(!r.break_pressure_tanks.is_empty());
+    assert!(
+        r.break_pressure_tanks
+            .iter()
+            .all(|t| t.id.starts_with("PRV"))
+    );
+    assert!(r.over_pressure.is_empty() && r.infeasible.is_empty() && r.static_deficit.is_empty());
 }

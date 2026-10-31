@@ -61,7 +61,10 @@ fn a_designed_scheme_draws_a_full_set() {
     let mut still_net = n.clone();
     still_net.options.demand_multiplier = 0.0;
     let still = Hydraulics::new(&still_net).unwrap().solve(0, &[]);
-    let path: Vec<String> = (1..=6).map(|i| format!("P{i}")).collect();
+    // The trunk as the layout orients it: the design put break-pressure
+    // tanks into it.
+    let paths = ds_water_layout::orient(n).unwrap();
+    let path = paths[0].pipes.clone();
     let surface = |p: [f64; 2]| {
         Some(if p[0] <= 1000.0 {
             1500.0 + 0.05 * p[0]
