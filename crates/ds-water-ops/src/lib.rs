@@ -18,8 +18,8 @@ use ds_water_profile::{ProfileOptions, ProfileResult};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub const OPERATIONS: [&str; 8] = [
-    "identity", "validate", "simulate", "layout", "design", "profile", "draw", "scheme",
+pub const OPERATIONS: [&str; 9] = [
+    "identity", "validate", "simulate", "layout", "process", "design", "profile", "draw", "scheme",
 ];
 
 #[derive(Debug, thiserror::Error)]
