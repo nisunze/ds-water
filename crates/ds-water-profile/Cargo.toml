@@ -1,0 +1,15 @@
+[package]
+name = "ds-water-profile"
+description = "Water vertical profile: ground, pipe, hydraulic and static grade lines along a path; air valves, washouts, isolation valves, break-pressure tanks and pressure findings."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ds-water-model.workspace = true
+ds-water-hydraulics.workspace = true
+ds-water-layout.workspace = true
+ds-terrain-sampling.workspace = true
+serde.workspace = true
+thiserror.workspace = true

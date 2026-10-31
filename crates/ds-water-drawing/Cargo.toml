@@ -1,0 +1,18 @@
+[package]
+name = "ds-water-drawing"
+description = "Water engineering drawings: plan-and-profile sheets with data bands, network plan and schedules, as SVG paper in millimetres."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ds-water-model.workspace = true
+ds-water-profile.workspace = true
+ds-water-design.workspace = true
+ds-water-layout.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+roxmltree = "0.20"
+ds-water-hydraulics.workspace = true

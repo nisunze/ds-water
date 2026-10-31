@@ -1,0 +1,14 @@
+[package]
+name = "ds-water-design"
+description = "Water engineering design: pipe catalogue, pressure classes, cost-ordered pipe sizing to pressure and velocity criteria, bill of quantities."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ds-water-model.workspace = true
+ds-water-hydraulics.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

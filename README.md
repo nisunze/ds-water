@@ -14,13 +14,15 @@ sampling) with ds-network by path, and follows the same Kernel command surface.
 | --- | --- |
 | `ds-water-model` | Network model (SI), validation, EPANET INP import/export |
 | `ds-water-hydraulics` | GGA solver (Todini-Pilati), EPS, pressure-driven demand, sparse Cholesky with minimum-degree ordering |
+| `ds-water-layout` | Horizontal: GeoJSON to network (snap, T-split, demand allocation), automatic layout along roads or by MST, orientation and paths with `ds-graph` |
+| `ds-water-design` | Engineering: ISO catalogue, pressure classes from static head + surge, cost-ordered sizing to pressure and velocity, BOQ |
+| `ds-water-profile` | Vertical: ground (via `ds-terrain-sampling`), pipe, HGL and static lines; air valves, washouts, isolation valves, break-pressure tanks, findings |
+| `ds-water-drawing` | Sheets: network plan, plan-and-profile with data bands, schedules (ISO A-size SVG, mm) |
 | `ds-water-synth` | Deterministic synthetic networks up to country scale |
 | `apps/ds-water-cli` | `ds-water` headless binary |
 
-Planned, in order: horizontal layout (`ds-water-layout`), vertical profile
-(`ds-water-profile`), engineering design (`ds-water-design`: pipe sizing,
-pressure classes, valves), drawings (`ds-water-drawing`), the WASM unit
-(`ds-water-wasm`), then the `ds water` chapter and the Water tab.
+Next: the WASM unit (`ds-water-wasm`), the `ds water` chapter through the
+Kernel, the Water tab, PDF through the Reporter's renderer, pressure zoning.
 
 ## Headless use
 
@@ -29,7 +31,15 @@ ds-water validate net.inp
 ds-water simulate net.json --eps --out results.json
 ds-water convert net.inp net.json
 ds-water bench --junctions 1000000
+ds-water layout features.geojson --surface dem.asc --out net.json
+ds-water design net.json --out designed.json --report design.json
+ds-water profile designed.json --surface dem.asc --out profile.json
+ds-water scheme fixtures/hill-villages/features.geojson --surface fixtures/hill-villages/dem.asc \
+  --title fixtures/hill-villages/title.json --out-dir out/hill-villages
 ```
+
+`scheme` runs the whole chain (layout → design → profiles → drawings) and
+writes the network as JSON and INP beside the sheets.
 
 ## Scale (ds-server, release build, 31 Oct 2026)
 
