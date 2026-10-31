@@ -17,10 +17,23 @@ pub fn water_invoke(operation: &str, request_json: &str) -> Result<String, Strin
     serde_json::to_string(&answer).map_err(|e| e.to_string())
 }
 
-/// Engine name, version and operations, for the unit's install record.
+/// The unit's identity: what the Kernel admits it by — the engine, its
+/// operations and the producer receipt (source and dependency closure) the
+/// release stamped into it.
 #[wasm_bindgen]
 pub fn water_engine_identity() -> String {
-    water_invoke("identity", "").expect("identity never fails")
+    let engine =
+        ds_water_ops::invoke("identity", serde_json::Value::Null).expect("identity never fails");
+    serde_json::json!({
+        "schema": "ds.water-engine/v1",
+        "protocolMajor": 1,
+        "environment": "wasm",
+        "coreVersion": env!("CARGO_PKG_VERSION"),
+        "sourceSha": env!("DS_WATER_WASM_SOURCE_SHA"),
+        "dependencyClosureSha256": env!("DS_WATER_WASM_DEPENDENCY_CLOSURE_SHA256"),
+        "capabilities": engine["operations"],
+    })
+    .to_string()
 }
 
 #[cfg(test)]
@@ -29,7 +42,16 @@ mod tests {
 
     #[test]
     fn the_door_passes_requests_and_refusals_through() {
-        assert!(water_engine_identity().contains("\"engine\":\"ds-water\""));
+        let identity: serde_json::Value = serde_json::from_str(&water_engine_identity()).unwrap();
+        assert_eq!(identity["schema"], "ds.water-engine/v1");
+        assert_eq!(identity["sourceSha"], "development");
+        assert!(
+            identity["capabilities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|op| op == "scheme")
+        );
         assert!(
             water_invoke("teleport", "{}")
                 .unwrap_err()
