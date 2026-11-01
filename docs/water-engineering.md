@@ -101,8 +101,11 @@ A project with a WASAC specification overrides them.
    volume), and tank placement as the "transformer" of each zone.
 3. DMA formation for towns.
 4. LP sizing for branched schemes; GA for looped towns.
-5. The Kernel chapter `ds water …`, the WASM unit and the Water tab beside
-   LV, MV and PM; ground arrives through the existing raster/terrain plugin.
+
+The Kernel chapter, the units and the DS Grid model are in place; what a
+network model is and how it is saved is in
+[water-network-contract.md](water-network-contract.md), and the ordered
+roadmap is ds-cli OPEN §39.
 
 ## Sources
 

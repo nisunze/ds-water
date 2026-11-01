@@ -7,6 +7,10 @@
 
 mod surface;
 
+#[cfg(test)]
+#[path = "golden_tests.rs"]
+mod golden_tests;
+
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
