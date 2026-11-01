@@ -14,6 +14,7 @@ ds-water-process.workspace = true
 ds-water-design.workspace = true
 ds-water-profile.workspace = true
 ds-water-drawing.workspace = true
+ds-water-synth.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

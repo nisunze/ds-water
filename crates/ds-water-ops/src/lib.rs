@@ -20,9 +20,9 @@ use ds_water_profile::{ProfileOptions, ProfileResult};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub const OPERATIONS: [&str; 10] = [
+pub const OPERATIONS: [&str; 11] = [
     "identity", "validate", "simulate", "analysis", "layout", "process", "design", "profile",
-    "draw", "scheme",
+    "draw", "scheme", "example",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -164,6 +164,28 @@ struct DrawRequest {
     sheets: SheetRequest,
 }
 
+/// A hypothetical village scheme for tests and demonstrations.
+#[derive(Debug, Deserialize)]
+struct ExampleRequest {
+    /// Where its spring is, `[lon, lat]`.
+    at: [f64; 2],
+    #[serde(default = "one")]
+    seed: u64,
+    #[serde(default = "village_households")]
+    households: usize,
+}
+
+fn one() -> u64 {
+    1
+}
+
+fn village_households() -> usize {
+    120
+}
+
+/// The most households an example village holds.
+pub const MAX_EXAMPLE_HOUSEHOLDS: usize = 2_000;
+
 #[derive(Debug, Deserialize)]
 struct SchemeRequest {
     features: Value,
@@ -258,6 +280,36 @@ pub fn invoke(operation: &str, request: Value) -> Result<Value, OpError> {
                 "design_report": designed,
                 "sheets": sheets,
                 "profiles": profiles,
+            }))
+        }
+        "example" => {
+            let r: ExampleRequest = serde_json::from_value(request)?;
+            let valid = r.at[0].abs() <= 180.0 && r.at[1].abs() <= 85.0;
+            if !valid || r.households == 0 || r.households > MAX_EXAMPLE_HOUSEHOLDS {
+                return Err(OpError::Engine(format!(
+                    "an example village needs a lon/lat `at` and 1..={MAX_EXAMPLE_HOUSEHOLDS} households"
+                )));
+            }
+            let features = ds_water_synth::village::Village {
+                at: r.at,
+                seed: r.seed,
+                households: r.households,
+            }
+            .features();
+            let laid = layout(&features, &LayoutOptions::default(), None)?;
+            let designed = ds_water_design::design(
+                &laid.network,
+                &Catalogue::standard(),
+                &DesignCriteria::default(),
+            )
+            .map_err(engine)?;
+            let mut network = designed.network.clone();
+            network.name = format!("Example village {} (seed {})", r.households, r.seed);
+            Ok(json!({
+                "layout": { "mode": laid.mode, "paths": laid.paths.len(), "unserved": laid.unserved, "notes": laid.notes },
+                "design": summary(&designed),
+                "network": network,
+                "features": features,
             }))
         }
         other => Err(OpError::Unknown(other.to_owned())),
@@ -419,6 +471,45 @@ pub fn summary(r: &DesignResult) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_example_village_is_placed_designed_and_repeatable() {
+        let request = json!({"at": [29.72, -2.77], "seed": 3, "households": 60});
+        let answer = invoke("example", request.clone()).expect("an example village");
+        let network = &answer["network"];
+        assert_eq!(network["crs"], "EPSG:4326");
+        assert!(network["junctions"].as_array().unwrap().len() >= 10);
+        assert!(!network["pipes"].as_array().unwrap().is_empty());
+        assert!(
+            network["reservoirs"].as_array().unwrap().len() == 1,
+            "one spring"
+        );
+        let x = network["junctions"][0]["x"].as_f64().unwrap();
+        let y = network["junctions"][0]["y"].as_f64().unwrap();
+        assert!(
+            (x - 29.72).abs() < 0.05 && (y + 2.77).abs() < 0.05,
+            "near the point: {x}, {y}"
+        );
+        assert_eq!(
+            answer["layout"]["unserved"],
+            json!([]),
+            "every household is reached"
+        );
+        assert_eq!(
+            invoke("example", request).unwrap(),
+            answer,
+            "the same seed, the same village"
+        );
+        let other = invoke(
+            "example",
+            json!({"at": [29.72, -2.77], "seed": 4, "households": 60}),
+        )
+        .unwrap();
+        assert_ne!(other["network"], answer["network"]);
+        assert!(invoke("example", json!({"at": [400.0, 0.0]})).is_err());
+        assert!(invoke("example", json!({"at": [29.7, -2.7], "households": 0})).is_err());
+        assert!(invoke("example", json!({"seed": 1})).is_err());
+    }
 
     fn fixture() -> Value {
         json!({

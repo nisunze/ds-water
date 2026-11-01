@@ -212,6 +212,7 @@ dependencies = [
  "ds-water-model",
  "ds-water-process",
  "ds-water-profile",
+ "ds-water-synth",
  "serde",
  "serde_json",
  "thiserror",
@@ -244,6 +245,7 @@ name = "ds-water-synth"
 version = "0.1.0"
 dependencies = [
  "ds-water-model",
+ "serde_json",
 ]
 
 [[package]]

@@ -6,6 +6,8 @@
 //! Rwanda's. Coordinates are local metres. The same seed always gives the
 //! same network, so a benchmark can be repeated exactly.
 
+pub mod village;
+
 use ds_water_model::{Junction, Pipe, Reservoir, WaterNetwork};
 
 #[derive(Clone, Debug)]
