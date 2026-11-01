@@ -21,7 +21,7 @@ A saved network is a governed project grid model, kept exactly like an LV transf
 - **Identity.** The catalog model id is `water_<slug of the name>`; the manifest model id is `water-network-<sha256 of the model id>`; the manifest revision is the saved revision, from 1. Packing is deterministic: the same network packs to the same bytes on the native addon and the WASM unit.
 - **Admission.** Unpacking verifies the profile, the manifest identity, every asset's length and sha256, and that no other asset is present; the network is read back through `WaterNetwork`.
 - **Catalog.** Brain's project grid catalog admits the kind `water_network`. A save creates a revision through the Kernel's `grid_publication` (the same governed path as LV): the bytes are uploaded content-addressed, and the revision is fenced on the head the save read. A save appends a revision to the head's version (`water-r<revision>`); a moved head refuses.
-- **Local models.** A dropped `.dsgrid` is a local layer (the existing `map.local` machinery), never a project model and never a parallel model state. When its members include a descriptor ending `/water-network-v1.json`, its kind is Water, which picks Water's opener and context menu on the Model tab; it reaches a project only by a deliberate save. The Water opener is not built yet.
+- **Local layers.** A dropped `.dsgrid` is an ordinary local layer import (owner: "it is just local dsgrid layers"): it is unpacked into plan layers stamped with the model kind, which is Water when its members include a descriptor ending `/water-network-v1.json`. Water's engineering items reach such a layer through its context menu; it reaches a project only by a deliberate save. The Water items there are not built yet.
 
 ## 3. Engine operations
 
@@ -85,6 +85,6 @@ Water carries its hydraulic engine and its menu items; everything else is LV's a
 
 - the `.dsgrid` container (`ds-grid-exchange`), the project grid catalog and the governed publication (`grid_publication`);
 - `ds-graph` (oriented trees from the sources) and `ds-terrain-sampling` (metric route sampling);
-- the engineering menu, the in-page command line, the Model tab's `local_models`, and component installation and updates (native addon and WASM unit).
+- the engineering menu, the in-page command line, local layer import, and component installation and updates (native addon and WASM unit).
 
 Still to plug in, by reusing rather than forking: tiles and Style Center styling, terrain seeding, the MV profile view, Reporter printing (plan and profile sheets with materials), Sync Center, and exchange with other water software.
