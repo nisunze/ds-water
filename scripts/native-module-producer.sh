@@ -15,7 +15,7 @@ case "${1:-}" in
 usage: native-module-producer.sh [TARGET_TRIPLE]
 
 Builds the `ds-water` standalone addon from the clean ds-water checkout that
-contains this script and stages ds-water-TARGET_TRIPLE[.exe].
+contains this script and stages water-TARGET_TRIPLE[.exe] (component-named, as packaging expects).
 
   DS_MODULE_STAGE_DIR      required directory for the staged executable
   DS_RELEASE_PIN_DS_WATER  required SHA of this checkout, when pinning
@@ -116,7 +116,7 @@ BUILT_BIN="$WATER_TARGET_DIR/$TARGET_TRIPLE/release/ds-water$EXE_SUFFIX"
 	exit 1
 }
 
-STAGED_BIN="$STAGE_DIR/ds-water-$TARGET_TRIPLE$EXE_SUFFIX"
+STAGED_BIN="$STAGE_DIR/water-$TARGET_TRIPLE$EXE_SUFFIX"
 mkdir -p "$STAGE_DIR"
 STAGED_TEMP="$STAGED_BIN.tmp.$$"
 cleanup() { rm -f -- "$STAGED_TEMP"; }
