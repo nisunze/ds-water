@@ -87,16 +87,22 @@ mod tests {
                 format!("ds-water@{}+{source}", env!("CARGO_PKG_VERSION"))
             ),
         }
-        assert!(identity["capabilities"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|op| op == "scheme"));
-        assert!(water_invoke("teleport", "{}")
-            .unwrap_err()
-            .contains("unknown water operation"));
-        assert!(water_invoke("simulate", "{not json")
-            .unwrap_err()
-            .starts_with("water_request_invalid"));
+        assert!(
+            identity["capabilities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|op| op == "scheme")
+        );
+        assert!(
+            water_invoke("teleport", "{}")
+                .unwrap_err()
+                .contains("unknown water operation")
+        );
+        assert!(
+            water_invoke("simulate", "{not json")
+                .unwrap_err()
+                .starts_with("water_request_invalid")
+        );
     }
 }
