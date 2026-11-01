@@ -1,0 +1,9 @@
+{
+  "schema": "ds.native-module/v1",
+  "component": "water",
+  "package": "ds-water-cli",
+  "producer": "scripts/native-module-producer.sh",
+  "producerProtocol": "ds.staged-module-producer/v1",
+  "probe": ["build-info"],
+  "capture": ["ds-network"]
+}

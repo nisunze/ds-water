@@ -10,6 +10,9 @@ repository.workspace = true
 name = "ds-water"
 path = "src/main.rs"
 
+[build-dependencies]
+sha2 = "0.10"
+
 [dependencies]
 ds-water-model.workspace = true
 ds-water-hydraulics.workspace = true

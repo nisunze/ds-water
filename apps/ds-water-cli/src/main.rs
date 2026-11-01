@@ -29,6 +29,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// The engine's identity, as Core admits an installed component by it.
+    #[command(name = "build-info")]
+    BuildInfo,
+    /// Run one operation on the JSON request read from stdin (Core's door:
+    /// the same `{operation, request}` the WASM unit takes).
+    Invoke { operation: String },
     /// Check a network for structural problems.
     Validate { network: PathBuf },
     /// Solve a snapshot (or the extended period with --eps).
@@ -204,6 +210,32 @@ fn merge(mut a: Value, b: Value) -> Value {
     a
 }
 
+/// The engine identity Core admits: the engine, its operations and schemas,
+/// and the release a stamped build names (`ds-water@<version>+<source>`,
+/// what a saved network records); a development build names none.
+fn build_info() -> Value {
+    let version = env!("CARGO_PKG_VERSION");
+    let source = Some(env!("DS_WATER_SOURCE_SHA")).filter(|sha| *sha != "development");
+    let engine = ds_water_ops::invoke("identity", Value::Null).expect("identity never fails");
+    let mut identity = json!({
+        "schema": "ds.engine-build/v1",
+        "name": "ds-water-engine",
+        "version": version,
+        "source_sha": env!("DS_WATER_SOURCE_SHA"),
+        "target": env!("DS_WATER_TARGET"),
+        "profile": env!("DS_WATER_PROFILE"),
+        "rustc": env!("DS_WATER_RUSTC"),
+        "cargo_lock_sha256": env!("DS_WATER_CARGO_LOCK_SHA256"),
+        "build_manifest_sha256": env!("DS_WATER_BUILD_MANIFEST_SHA256"),
+        "schemas": ["ds.water.network/v1"],
+        "capabilities": engine["operations"],
+    });
+    if let Some(source) = source {
+        identity["release"] = format!("ds-water@{version}+{source}").into();
+    }
+    identity
+}
+
 fn invoke(operation: &str, request: Value) -> Result<Value> {
     ds_water_ops::invoke(operation, request).map_err(|e| anyhow::anyhow!("{e}"))
 }
@@ -239,6 +271,18 @@ fn write_sheets(answer: &Value, out_dir: &Path) -> Result<Value> {
 
 fn run(command: Command) -> Result<Value> {
     match command {
+        Command::BuildInfo => Ok(build_info()),
+        Command::Invoke { operation } => {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+                .context("reading the request from stdin")?;
+            let request = if text.trim().is_empty() {
+                Value::Null
+            } else {
+                serde_json::from_str(&text).context("the request is not JSON")?
+            };
+            invoke(&operation, request)
+        }
         Command::Validate { network } => {
             let n = read_network(&network)?;
             let answer = invoke("validate", json!({ "network": n }))?;
