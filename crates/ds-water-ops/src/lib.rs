@@ -11,18 +11,20 @@
 
 pub mod analysis;
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use ds_water_design::{BoqLine, Catalogue, DesignCriteria, DesignResult};
 use ds_water_drawing::{DrawingOptions, Sheet, TitleInfo};
 use ds_water_hydraulics::{Hydraulics, Snapshot};
 use ds_water_layout::{LayoutOptions, LayoutResult};
 use ds_water_model::{WaterNetwork, inp};
+use ds_water_package::WaterNetworkSnapshot;
 use ds_water_profile::{ProfileOptions, ProfileResult};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub const OPERATIONS: [&str; 11] = [
+pub const OPERATIONS: [&str; 13] = [
     "identity", "validate", "simulate", "analysis", "layout", "process", "design", "profile",
-    "draw", "scheme", "example",
+    "draw", "scheme", "example", "pack", "unpack",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -186,6 +188,24 @@ fn village_households() -> usize {
 /// The most households an example village holds.
 pub const MAX_EXAMPLE_HOUSEHOLDS: usize = 2_000;
 
+/// A saved network to pack as its governed DS Grid model.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PackRequest {
+    network: WaterNetwork,
+    model_id: String,
+    revision: u64,
+    #[serde(default)]
+    project: Option<String>,
+}
+
+/// A `.dsgrid` package, base64 in the JSON frame.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UnpackRequest {
+    dsgrid_base64: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct SchemeRequest {
     features: Value,
@@ -310,6 +330,33 @@ pub fn invoke(operation: &str, request: Value) -> Result<Value, OpError> {
                 "design": summary(&designed),
                 "network": network,
                 "features": features,
+            }))
+        }
+        "pack" => {
+            let r: PackRequest = serde_json::from_value(request)?;
+            let (bytes, packed) = ds_water_package::pack_network(&WaterNetworkSnapshot {
+                source_project_id: r.project,
+                model_id: r.model_id,
+                source_revision: r.revision,
+                network: r.network,
+            })
+            .map_err(engine)?;
+            Ok(json!({
+                "model_kind": ds_water_package::MODEL_KIND,
+                "profile": ds_water_package::PROFILE,
+                "packed": packed,
+                "dsgrid_base64": BASE64.encode(bytes),
+            }))
+        }
+        "unpack" => {
+            let r: UnpackRequest = serde_json::from_value(request)?;
+            let bytes = BASE64.decode(r.dsgrid_base64.as_bytes()).map_err(engine)?;
+            let snapshot = ds_water_package::unpack_network(&bytes).map_err(engine)?;
+            Ok(json!({
+                "model_id": snapshot.model_id,
+                "revision": snapshot.source_revision,
+                "project": snapshot.source_project_id,
+                "network": snapshot.network,
             }))
         }
         other => Err(OpError::Unknown(other.to_owned())),
@@ -509,6 +556,37 @@ mod tests {
         assert!(invoke("example", json!({"at": [400.0, 0.0]})).is_err());
         assert!(invoke("example", json!({"at": [29.7, -2.7], "households": 0})).is_err());
         assert!(invoke("example", json!({"seed": 1})).is_err());
+    }
+
+    #[test]
+    fn a_designed_village_packs_into_its_dsgrid_model_and_back() {
+        let village = invoke(
+            "example",
+            json!({"at": [29.72, -2.77], "seed": 3, "households": 20}),
+        )
+        .unwrap();
+        let request = json!({"network": village["network"], "model_id": "water_village",
+            "revision": 2, "project": "arjgpydw_survey_test"});
+        let packed = invoke("pack", request.clone()).unwrap();
+        assert_eq!(packed["model_kind"], "water_network");
+        assert_eq!(packed["packed"]["manifest_model_revision"], 2);
+        assert_eq!(
+            invoke("pack", request).unwrap(),
+            packed,
+            "same network, same bytes"
+        );
+        let opened = invoke("unpack", json!({"dsgrid_base64": packed["dsgrid_base64"]})).unwrap();
+        assert_eq!(opened["network"], village["network"]);
+        assert_eq!(opened["model_id"], "water_village");
+        assert_eq!(opened["revision"], 2);
+        assert!(invoke("unpack", json!({"dsgrid_base64": "bm90IGEgcGFja2FnZQ=="})).is_err());
+        assert!(
+            invoke(
+                "pack",
+                json!({"network": village["network"], "model_id": "w", "revision": 0})
+            )
+            .is_err()
+        );
     }
 
     fn fixture() -> Value {

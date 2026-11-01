@@ -19,13 +19,21 @@ ds-water-drawing = { path = "crates/ds-water-drawing" }
 ds-water-synth = { path = "crates/ds-water-synth" }
 ds-water-ops = { path = "crates/ds-water-ops" }
 ds-water-process = { path = "crates/ds-water-process" }
+ds-water-package = { path = "crates/ds-water-package" }
 
 # Shared with the LV and MV verticals (ds-network), read-only by path: the
 # oriented-tree primitive and the metric route sampler.
 ds-graph = { path = "../ds-network/crates/ds-graph" }
 ds-terrain-sampling = { path = "../ds-network/crates/ds-terrain-sampling" }
+# A network is a governed DS Grid model like an LV transformer: the same
+# .dsgrid container, packed through its public API.
+ds-grid-exchange = { path = "../ds-network/crates/ds-grid-exchange" }
+ds-grid-model = { path = "../ds-network/crates/ds-grid-model" }
 
 anyhow = "1"
+base64 = "0.22"
+ruzstd = "0.9.1"
+sha2 = "0.10"
 clap = { version = "4", features = ["derive"] }
 libm = "0.2"
 serde = { version = "1", features = ["derive"] }
@@ -40,3 +48,8 @@ strip = "symbols"
 
 [profile.dev.package.ds-water-hydraulics]
 opt-level = 3
+
+# ds-grid-exchange reads GIS through ds-io on terrio; a patch applies only
+# from the root workspace, so Water carries the same pin as ds-network.
+[patch.crates-io]
+terrio = { git = "https://github.com/opengeos/terrio", rev = "626cfc852f77acae5c6bcf47f40e7bc1929a8bef" }
