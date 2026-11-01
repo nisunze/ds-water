@@ -21,7 +21,7 @@ A saved network is a governed project grid model, kept exactly like an LV transf
 - **Identity.** The catalog model id is `water_<slug of the name>`; the manifest model id is `water-network-<sha256 of the model id>`; the manifest revision is the saved revision, from 1. Packing is deterministic: the same network packs to the same bytes on the native addon and the WASM unit.
 - **Admission.** Unpacking verifies the profile, the manifest identity, every asset's length and sha256, and that no other asset is present; the network is read back through `WaterNetwork`.
 - **Catalog.** Brain's project grid catalog admits the kind `water_network`. A save creates a revision through the Kernel's `grid_publication` (the same governed path as LV): the bytes are uploaded content-addressed, and the revision is fenced on the head the save read. A save appends a revision to the head's version (`water-r<revision>`); a moved head refuses.
-- **Local models.** A dropped `.dsgrid` whose members include a descriptor ending `/water-network-v1.json` is a Water model on the Model tab (the shared `local_models` surface), held on the machine and never saved to a project unless saved deliberately. The Water opener is not built yet.
+- **Local models.** A dropped `.dsgrid` is a local layer (the existing `map.local` machinery), never a project model and never a parallel model state. When its members include a descriptor ending `/water-network-v1.json`, its kind is Water, which picks Water's opener and context menu on the Model tab; it reaches a project only by a deliberate save. The Water opener is not built yet.
 
 ## 3. Engine operations
 
