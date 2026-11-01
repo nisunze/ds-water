@@ -5,5 +5,5 @@
   "producer": "scripts/native-module-producer.sh",
   "producerProtocol": "ds.staged-module-producer/v1",
   "probe": ["build-info"],
-  "capture": ["ds-network"]
+  "capture": ["ds-network", "ds-cli"]
 }
