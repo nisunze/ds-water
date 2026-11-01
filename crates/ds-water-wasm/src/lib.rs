@@ -13,8 +13,7 @@ pub fn water_invoke(operation: &str, request_json: &str) -> Result<String, Strin
     } else {
         serde_json::from_str(request_json).map_err(|e| format!("water_request_invalid: {e}"))?
     };
-    let answer = ds_water_ops::invoke(operation, request).map_err(|e| e.to_string())?;
-    serde_json::to_string(&answer).map_err(|e| e.to_string())
+    answered(operation, request)
 }
 
 /// The page's unit door calls one argument: `{operation, request}`, framed
@@ -26,8 +25,25 @@ pub fn water_invoke_json(frame_json: &str) -> Result<String, String> {
     let operation = frame["operation"]
         .as_str()
         .ok_or("water_request_invalid: the frame names no operation")?;
-    let answer =
-        ds_water_ops::invoke(operation, frame["request"].clone()).map_err(|e| e.to_string())?;
+    answered(operation, frame["request"].clone())
+}
+
+/// The release a stamped build names (`ds-water@<version>+<source>`), which a
+/// saved network records; a development build names none.
+fn release() -> Option<String> {
+    let source = env!("DS_WATER_WASM_SOURCE_SHA");
+    (source.len() == 40 && source.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| format!("ds-water@{}+{source}", env!("CARGO_PKG_VERSION")))
+}
+
+/// One operation's answer as text; `identity` also names the release.
+fn answered(operation: &str, request: serde_json::Value) -> Result<String, String> {
+    let mut answer = ds_water_ops::invoke(operation, request).map_err(|e| e.to_string())?;
+    if let ("identity", Some(release), Some(fields)) =
+        (operation, release(), answer.as_object_mut())
+    {
+        fields.insert("release".into(), release.into());
+    }
     serde_json::to_string(&answer).map_err(|e| e.to_string())
 }
 
@@ -58,23 +74,29 @@ mod tests {
     fn the_door_passes_requests_and_refusals_through() {
         let identity: serde_json::Value = serde_json::from_str(&water_engine_identity()).unwrap();
         assert_eq!(identity["schema"], "ds.water-engine/v1");
-        assert_eq!(identity["sourceSha"], "development");
-        assert!(
-            identity["capabilities"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|op| op == "scheme")
-        );
-        assert!(
-            water_invoke("teleport", "{}")
-                .unwrap_err()
-                .contains("unknown water operation")
-        );
-        assert!(
-            water_invoke("simulate", "{not json")
-                .unwrap_err()
-                .starts_with("water_request_invalid")
-        );
+        let answer: serde_json::Value =
+            serde_json::from_str(&water_invoke("identity", "").unwrap()).unwrap();
+        assert_eq!(answer["engine"], "ds-water");
+        match identity["sourceSha"].as_str().unwrap() {
+            "development" => assert!(
+                answer.get("release").is_none(),
+                "a development build names no release"
+            ),
+            source => assert_eq!(
+                answer["release"],
+                format!("ds-water@{}+{source}", env!("CARGO_PKG_VERSION"))
+            ),
+        }
+        assert!(identity["capabilities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|op| op == "scheme"));
+        assert!(water_invoke("teleport", "{}")
+            .unwrap_err()
+            .contains("unknown water operation"));
+        assert!(water_invoke("simulate", "{not json")
+            .unwrap_err()
+            .starts_with("water_request_invalid"));
     }
 }
