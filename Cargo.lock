@@ -606,6 +606,7 @@ dependencies = [
  "ds-grid-physics",
  "ds-network-contracts",
  "ds-profile",
+ "geo",
  "regex",
  "schemars",
  "serde",
