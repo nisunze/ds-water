@@ -4,6 +4,22 @@
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
+pub mod plugin;
+
+/// The `ds water …` commands this unit brings to the page's command door
+/// (`ds.plugin-commands/v1`); the page registers them with the Kernel.
+#[wasm_bindgen(js_name = pluginManifest)]
+pub fn plugin_manifest() -> String {
+    plugin::manifest().to_string()
+}
+
+/// Water Network, this unit's own Design area (`ds.plugin-ribbon/v1`), a
+/// registration separate from its commands.
+#[wasm_bindgen(js_name = pluginRibbon)]
+pub fn plugin_ribbon() -> String {
+    plugin::ribbon().to_string()
+}
+
 /// Run one Water operation (`identity`, `validate`, `simulate`, `layout`,
 /// `design`, `profile`, `draw`, `scheme`) on a JSON request.
 #[wasm_bindgen]

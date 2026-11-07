@@ -1,0 +1,108 @@
+//! What the Water unit hands the Kernel's generic component door (product
+//! scope §7): its `ds water …` commands (`ds.plugin-commands/v1`) and its own
+//! Design area, Water Network (`ds.plugin-ribbon/v1` with an `area`). These
+//! are two separate registrations, so a Kernel that refuses the area ribbon
+//! still holds the commands.
+//!
+//! The area is the Kernel's Water arm moved as it is (ds-cli e09cbcea2:
+//! `application_menus_distribution::water_groups` and `model_row`'s Water
+//! lead) with the words the page shows today. The Kernel keeps the shared
+//! model frame (`water_setup` … `water_profile`) in the `water_network`
+//! group, where the page lends the network selector.
+
+use serde_json::{Value, json};
+
+pub const NAMESPACE: &str = "water";
+
+/// The operations `water.run` and `water.save` take, as Core declares them.
+const OPERATIONS: &str = "identity, validate, simulate, analysis, layout, process, design, profile, draw, scheme or example";
+
+/// The `ds water …` commands, as Core declares them (ds-cli-design `water.rs`).
+/// The door supplies the project; Core keeps the lane and the payload file.
+pub fn manifest() -> Value {
+    json!({
+        "schema": "ds.plugin-commands/v1",
+        "plugin": "water",
+        "namespace": NAMESPACE,
+        "commands": [
+            {
+                "words": ["water", "models"],
+                "summary": "List a project's saved Water networks, newest change first.",
+                "members": [],
+                "examples": ["ds water models --project <id>"],
+                "refusals": ["water_models_list_failed"]
+            },
+            {
+                "words": ["water", "run"],
+                "summary": "Lay out, process, design, profile and draw water supply networks.",
+                "members": [
+                    {"name": "operation", "type": "text", "required": true,
+                     "help": format!("The Water operation: {OPERATIONS}.")},
+                    {"name": "payload", "type": "json", "help": "The operation's request as one JSON object."},
+                    {"name": "model", "type": "text", "help": "Run on this saved Water network's current governed revision."}
+                ],
+                "examples": ["ds water run --operation identity"],
+                "refusals": ["water_payload_invalid", "water_engine_refused", "water_engine_missing"]
+            },
+            {
+                "words": ["water", "save"],
+                "summary": "Save the network a Water operation makes as a project's next version.",
+                "effect": "local_write",
+                "members": [
+                    {"name": "name", "type": "text", "help": "The network's name; it makes the model id water_<slug>."},
+                    {"name": "model", "type": "text", "help": "Save the result as this saved network's next version."},
+                    {"name": "operation", "type": "text", "required": true,
+                     "help": format!("The Water operation: {OPERATIONS}.")},
+                    {"name": "payload", "type": "json", "help": "The operation's request as one JSON object."},
+                    {"name": "message", "type": "text", "help": "Why this version exists."}
+                ],
+                "examples": ["ds water save --project <id> --name \"Test village 1\" --operation example"],
+                "refusals": ["water_payload_invalid", "water_engine_refused", "water_engine_missing"]
+            }
+        ]
+    })
+}
+
+fn page(id: &str, icon: &str, en: &str, fr: &str) -> Value {
+    json!({"page": id, "icon": icon, "label": {"en": en, "fr": fr}})
+}
+
+/// Water Network, Design's area for a water network (owner, 2–3 Nov 2026:
+/// it mimics Distribution and Transmission): Settings, the network frame,
+/// Engineer and Output; the Kernel adds the shared frame and Design's reports.
+pub fn ribbon() -> Value {
+    json!({
+        "schema": "ds.plugin-ribbon/v1",
+        "namespace": NAMESPACE,
+        "area": {
+            "id": "water",
+            "kind": "water",
+            "icon": "map",
+            "frame": "water_network",
+            "lead": [page("water_open", "folder", "Open network", "Ouvrir le réseau")]
+        },
+        "label": {"en": "Water Network", "fr": "Réseau d'eau"},
+        "groups": [
+            {"id": "settings", "label": {"en": "Settings", "fr": "Paramètres"}, "entries": [
+                page("water_library", "library", "Library", "Bibliothèque"),
+                page("water_layout", "add", "New", "Nouveau"),
+                page("water_import", "import", "Import", "Importer"),
+                page("water_refresh", "refresh", "Refresh", "Actualiser")
+            ]},
+            {"id": "engineer", "label": {"en": "Engineer", "fr": "Ingénierie"}, "entries": [
+                page("water_process", "process", "Process", "Traiter"),
+                page("water_autoprocess", "autoprocess", "Auto-process", "Traitement auto"),
+                page("water_design", "pipe_size", "Size pipes", "Dimensionner les conduites"),
+                page("water_simulate", "statistics", "Simulate", "Simuler")
+            ]},
+            {"id": "output", "label": {"en": "Output", "fr": "Sortie"}, "entries": [
+                page("water_draw", "print", "Drawings", "Plans"),
+                page("water_export", "export", "Export", "Exporter")
+            ]}
+        ]
+    })
+}
+
+#[cfg(test)]
+#[path = "plugin_tests.rs"]
+mod tests;

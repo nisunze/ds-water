@@ -1,0 +1,115 @@
+use super::*;
+
+fn ids(entries: &Value) -> Vec<&str> {
+    entries
+        .as_array()
+        .expect("entries")
+        .iter()
+        .map(|entry| entry["page"].as_str().expect("a page command"))
+        .collect()
+}
+
+#[test]
+fn the_commands_are_cores_water_commands_without_the_doors_own_fields() {
+    let manifest = manifest();
+    assert_eq!(manifest["namespace"], NAMESPACE);
+    let commands = manifest["commands"].as_array().unwrap();
+    let words: Vec<String> = commands
+        .iter()
+        .map(|command| {
+            command["words"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|word| word.as_str().unwrap())
+                .collect::<Vec<_>>()
+                .join(".")
+        })
+        .collect();
+    assert_eq!(words, ["water.models", "water.run", "water.save"]);
+    for command in commands {
+        for member in command["members"].as_array().unwrap() {
+            let name = member["name"].as_str().unwrap();
+            assert!(
+                !matches!(name, "project" | "lane" | "output" | "confirm" | "yes"),
+                "{name} is the door's or Core's own"
+            );
+        }
+    }
+    assert_eq!(commands[2]["effect"], "local_write", "a save asks first");
+}
+
+/// The Kernel's Water arm at ds-cli e09cbcea2, group by group.
+#[test]
+fn the_area_is_the_kernels_water_arm_moved_as_it_is() {
+    let ribbon = ribbon();
+    let area = &ribbon["area"];
+    assert_eq!(
+        (
+            area["id"].as_str(),
+            area["kind"].as_str(),
+            area["frame"].as_str()
+        ),
+        (Some("water"), Some("water"), Some("water_network"))
+    );
+    assert!(ribbon.get("anchor").is_none(), "an area, not a tab");
+    assert_eq!(ids(&area["lead"]), ["water_open"]);
+    let groups = ribbon["groups"].as_array().unwrap();
+    let group_ids: Vec<&str> = groups
+        .iter()
+        .map(|group| group["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(group_ids, ["settings", "engineer", "output"]);
+    assert_eq!(
+        ids(&groups[0]["entries"]),
+        [
+            "water_library",
+            "water_layout",
+            "water_import",
+            "water_refresh"
+        ]
+    );
+    assert_eq!(
+        ids(&groups[1]["entries"]),
+        [
+            "water_process",
+            "water_autoprocess",
+            "water_design",
+            "water_simulate"
+        ]
+    );
+    assert_eq!(ids(&groups[2]["entries"]), ["water_draw", "water_export"]);
+}
+
+#[test]
+fn every_word_fits_the_ribbon_in_both_languages() {
+    let ribbon = ribbon();
+    let mut labels = vec![&ribbon["label"]];
+    for group in ribbon["groups"].as_array().unwrap() {
+        labels.push(&group["label"]);
+        labels.extend(
+            group["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|e| &e["label"]),
+        );
+    }
+    labels.extend(
+        ribbon["area"]["lead"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| &e["label"]),
+    );
+    for label in labels {
+        for language in ["en", "fr"] {
+            let text = label[language].as_str().unwrap();
+            assert!(
+                !text.trim().is_empty() && text.chars().count() <= 40,
+                "{text}"
+            );
+        }
+    }
+}
+
