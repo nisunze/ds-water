@@ -10,7 +10,7 @@ fn ids(entries: &Value) -> Vec<&str> {
 }
 
 #[test]
-fn the_commands_are_cores_water_commands_without_the_doors_own_fields() {
+fn the_commands_are_cores_water_door_commands_without_the_doors_own_fields() {
     let manifest = manifest();
     assert_eq!(manifest["namespace"], NAMESPACE);
     let commands = manifest["commands"].as_array().unwrap();
@@ -26,7 +26,8 @@ fn the_commands_are_cores_water_commands_without_the_doors_own_fields() {
                 .join(".")
         })
         .collect();
-    assert_eq!(words, ["water.models", "water.run", "water.save"]);
+    // `water.models` is the Kernel's own read by the model kind.
+    assert_eq!(words, ["water.run", "water.save"]);
     for command in commands {
         for member in command["members"].as_array().unwrap() {
             let name = member["name"].as_str().unwrap();
@@ -36,7 +37,20 @@ fn the_commands_are_cores_water_commands_without_the_doors_own_fields() {
             );
         }
     }
-    assert_eq!(commands[2]["effect"], "local_write", "a save asks first");
+    assert_eq!(
+        commands[1]["effect"], "project_write",
+        "a save asks first; the Kernel publishes"
+    );
+    for command in commands {
+        for member in command["members"].as_array().unwrap() {
+            if matches!(member["type"].as_str(), Some("model" | "model_name")) {
+                assert_eq!(
+                    member["kind"], MODEL_KIND,
+                    "a model member names the declared kind"
+                );
+            }
+        }
+    }
 }
 
 /// The Kernel's Water arm at ds-cli e09cbcea2, group by group.

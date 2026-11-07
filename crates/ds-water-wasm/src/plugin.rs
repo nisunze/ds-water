@@ -10,9 +10,13 @@
 //! model frame (`water_setup` … `water_profile`) in the `water_network`
 //! group, where the page lends the network selector.
 
+use crate::door;
 use serde_json::{Value, json};
 
 pub const NAMESPACE: &str = "water";
+
+/// The project model kind this unit computes on.
+pub const MODEL_KIND: &str = "water_network";
 
 /// The operations `water.run` and `water.save` take, as Core declares them.
 const OPERATIONS: &str = "identity, validate, simulate, analysis, layout, process, design, profile, draw, scheme or example";
@@ -27,7 +31,7 @@ pub fn manifest() -> Value {
         // The project model kind the Kernel reads and publishes for Water, as
         // its built-in record declares it (ds-command-kernel `water_models.rs`).
         "models": [{
-            "kind": "water_network",
+            "kind": MODEL_KIND,
             "noun": "water network",
             "title": "Water network",
             "short": "network",
@@ -38,14 +42,9 @@ pub fn manifest() -> Value {
             "model_invalid": "water_network_invalid",
             "source_changed": "water_source_changed"
         }],
+        // `water.models` lists the project's saved networks: the Kernel's own
+        // read by the model kind, so the unit declares no door for it.
         "commands": [
-            {
-                "words": ["water", "models"],
-                "summary": "List a project's saved Water networks, newest change first.",
-                "members": [],
-                "examples": ["ds water models --project <id>"],
-                "refusals": ["water_models_list_failed"]
-            },
             {
                 "words": ["water", "run"],
                 "summary": "Lay out, process, design, profile and draw water supply networks.",
@@ -53,25 +52,29 @@ pub fn manifest() -> Value {
                     {"name": "operation", "type": "text", "required": true,
                      "help": format!("The Water operation: {OPERATIONS}.")},
                     {"name": "payload", "type": "json", "help": "The operation's request as one JSON object."},
-                    {"name": "model", "type": "text", "help": "Run on this saved Water network's current governed revision."}
+                    {"name": "model", "type": "model", "kind": MODEL_KIND,
+                     "help": "Run on this saved Water network's current governed revision."}
                 ],
                 "examples": ["ds water run --operation identity"],
-                "refusals": ["water_payload_invalid", "water_engine_refused", "water_engine_missing"]
+                "refusals": [door::REQUEST_INVALID, door::ENGINE_REFUSED, door::NETWORK_INVALID]
             },
             {
                 "words": ["water", "save"],
                 "summary": "Save the network a Water operation makes as a project's next version.",
-                "effect": "local_write",
+                "effect": "project_write",
                 "members": [
-                    {"name": "name", "type": "text", "help": "The network's name; it makes the model id water_<slug>."},
-                    {"name": "model", "type": "text", "help": "Save the result as this saved network's next version."},
+                    {"name": "name", "type": "model_name", "kind": MODEL_KIND,
+                     "help": "The network's name; it makes the model id water_<slug>."},
+                    {"name": "model", "type": "model", "kind": MODEL_KIND,
+                     "help": "Save the result as this saved network's next version."},
                     {"name": "operation", "type": "text", "required": true,
                      "help": format!("The Water operation: {OPERATIONS}.")},
                     {"name": "payload", "type": "json", "help": "The operation's request as one JSON object."},
                     {"name": "message", "type": "text", "help": "Why this version exists."}
                 ],
                 "examples": ["ds water save --project <id> --name \"Test village 1\" --operation example"],
-                "refusals": ["water_payload_invalid", "water_engine_refused", "water_engine_missing"]
+                "refusals": [door::REQUEST_INVALID, door::ENGINE_REFUSED, door::NETWORK_INVALID,
+                             door::UNIT_OUTDATED, door::INPUT_INVALID]
             }
         ]
     })

@@ -4,7 +4,21 @@
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
+pub mod door;
 pub mod plugin;
+
+/// One call through the page's `plugin` door (`water.run`, `water.save`):
+/// the Kernel-admitted request as JSON text; the answer the Kernel reads,
+/// with a save's `publish` plan.
+#[wasm_bindgen(js_name = pluginCall)]
+pub fn plugin_call(command: &str, request_json: &str) -> String {
+    match serde_json::from_str(request_json) {
+        Ok(serde_json::Value::Object(request)) => door::call(command, request, release()),
+        _ => serde_json::json!({"status": "refused", "refusal": {
+            "code": door::REQUEST_INVALID, "message": "The request must be one JSON object."}}),
+    }
+    .to_string()
+}
 
 /// The `ds water …` commands this unit brings to the page's command door
 /// (`ds.plugin-commands/v1`); the page registers them with the Kernel.
