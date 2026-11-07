@@ -151,3 +151,13 @@ fn the_model_kind_is_waters_own() {
         );
     }
 }
+
+#[test]
+fn the_plugs_standing_tab_is_this_units_area() {
+    // web/plug.json (product scope §8) carries the area the Kernel keeps while
+    // no compatible unit loads; it is this unit's own ribbon, word for word.
+    let plug: Value = serde_json::from_str(include_str!("../../../web/plug.json")).unwrap();
+    assert_eq!(plug["tab"], ribbon());
+    assert_eq!(plug["namespace"], NAMESPACE);
+    assert_eq!(plug["component"], NAMESPACE);
+}
