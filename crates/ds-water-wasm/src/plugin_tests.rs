@@ -153,11 +153,14 @@ fn the_model_kind_is_waters_own() {
 }
 
 #[test]
-fn the_plugs_standing_tab_is_this_units_area() {
-    // web/plug.json (product scope §8) carries the area the Kernel keeps while
-    // no compatible unit loads; it is this unit's own ribbon, word for word.
+fn the_plug_claims_no_standing_area_while_the_kernels_water_arm_serves() {
+    // web/plug.json (product scope §8) names no standing tab yet: until the
+    // Kernel's built-in Water area is deleted (W2-switch), a placed area would
+    // supersede it greyed wherever the lane's Water unit has no door. The
+    // W2-switch adds `"tab"`: this unit's own ribbon, word for word.
     let plug: Value = serde_json::from_str(include_str!("../../../web/plug.json")).unwrap();
-    assert_eq!(plug["tab"], ribbon());
+    assert!(plug.get("tab").is_none());
+    assert!(ribbon().is_object());
     assert_eq!(plug["namespace"], NAMESPACE);
     assert_eq!(plug["component"], NAMESPACE);
 }

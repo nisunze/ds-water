@@ -11,7 +11,7 @@ import { expect, it } from 'vitest';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const plug = JSON.parse(readFileSync(join(here, 'plug.json'), 'utf8')) as {
-	schema: string; component: string; namespace: string; requires: string[]; tab: { namespace: string };
+	schema: string; component: string; namespace: string; requires: string[]; tab?: { namespace: string };
 };
 
 it('requires exactly the members of the unit the plug calls', () => {
@@ -19,7 +19,9 @@ it('requires exactly the members of the unit the plug calls', () => {
 	const body = types.split('export type WaterUnit = {')[1].split('\n};')[0];
 	const members = [...body.matchAll(/^\t(\w+)\??\(/gm)].map((match) => match[1]).sort();
 	expect(plug.schema).toBe('ds.plugin-plug/v1');
-	expect([plug.component, plug.namespace, plug.tab.namespace]).toEqual(['water', 'water', 'water']);
+	expect([plug.component, plug.namespace]).toEqual(['water', 'water']);
+	// No standing area while the Kernel's built-in Water area serves (until the W2-switch).
+	expect(plug.tab).toBeUndefined();
 	expect(plug.requires).toEqual(members);
 });
 
