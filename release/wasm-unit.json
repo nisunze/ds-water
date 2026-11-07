@@ -4,6 +4,7 @@
   "package": "ds-water-wasm",
   "crate": "crates/ds-water-wasm",
   "stem": "ds_water_wasm",
+  "web": "web",
   "features": [],
   "metadataArgs": [],
   "identityExport": "water_engine_identity",

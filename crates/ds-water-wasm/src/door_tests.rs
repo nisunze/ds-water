@@ -159,3 +159,25 @@ fn every_refusal_is_a_declared_code_with_the_arms_words() {
         assert!(declared.contains(&REQUEST_INVALID) && declared.contains(&ENGINE_REFUSED));
     }
 }
+
+#[test]
+fn a_payload_read_from_a_file_is_its_json_text() {
+    let text = example().to_string();
+    let named = |payload: Value| {
+        call(
+            "water.save",
+            request(json!({"operation": "example", "payload": payload,
+                "name": {"name": "B", "model_id": "water_b", "revision": 1, "project": "p1"}})),
+            Some(RELEASE.into()),
+        )
+    };
+    let from_text = named(json!(text));
+    assert_eq!(from_text["status"], "ok", "{from_text}");
+    assert_eq!(
+        from_text["data"],
+        named(example())["data"],
+        "text and object read alike"
+    );
+    assert_eq!(named(json!("{oops"))["refusal"]["code"], REQUEST_INVALID);
+    assert_eq!(named(json!("[1]"))["refusal"]["code"], REQUEST_INVALID);
+}

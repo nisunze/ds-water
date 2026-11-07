@@ -70,14 +70,22 @@ fn text<'a>(request: &'a Map<String, Value>, member: &str) -> Option<&'a str> {
         .filter(|text| !text.trim().is_empty())
 }
 
-/// The operation and its request object (`null` when there is none).
+/// The operation and its request object (`null` when there is none). The
+/// payload is one JSON object, or its text as a page reads it from a file.
 fn operation(request: &Map<String, Value>) -> Result<(String, Value), Refused> {
     let operation = text(request, "operation")
         .ok_or((REQUEST_INVALID, "Name the Water operation.".to_owned()))?
         .to_owned();
-    let payload = match request.get("payload") {
+    let read = match request.get("payload") {
+        Some(Value::String(text)) => Some(
+            serde_json::from_str(text)
+                .map_err(|e| (REQUEST_INVALID, format!("The request is not JSON: {e}")))?,
+        ),
+        other => other.cloned(),
+    };
+    let payload = match read {
         None | Some(Value::Null) => Value::Null,
-        Some(payload @ Value::Object(_)) => payload.clone(),
+        Some(payload @ Value::Object(_)) => payload,
         Some(_) => {
             return Err((
                 REQUEST_INVALID,
