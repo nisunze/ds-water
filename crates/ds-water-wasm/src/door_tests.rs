@@ -91,6 +91,17 @@ fn a_run_on_a_saved_network_reads_as_the_kernels_arm_read_it() {
     assert!(answer.get("publish").is_none(), "a run plans no save");
     let plain = call("water.run", request(json!({"operation": "identity"})), None);
     assert_eq!(plain["data"]["engine"], "ds-water");
+    // Through the door, identity names the release as the unit's own entry does.
+    let named = call(
+        "water.run",
+        request(json!({"operation": "identity"})),
+        Some(RELEASE.into()),
+    );
+    assert_eq!(named["data"]["release"], RELEASE);
+    assert!(
+        plain["data"].get("release").is_none(),
+        "a development build names none"
+    );
 }
 
 #[test]

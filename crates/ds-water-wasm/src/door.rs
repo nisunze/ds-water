@@ -22,7 +22,7 @@ type Refused = (&'static str, String);
 /// Kernel reads (`{status, data, publish?}` or `{status: refused, …}`).
 pub fn call(command: &str, request: Map<String, Value>, release: Option<String>) -> Value {
     let answer = match command {
-        "water.run" => run(request),
+        "water.run" => run(request, release),
         "water.save" => save(request, release),
         _ => Err((
             REQUEST_INVALID,
@@ -118,10 +118,19 @@ fn opened(member: &Value) -> Result<Value, Refused> {
 }
 
 /// `water.run`: one operation, on a saved network when `model` names one.
-fn run(request: Map<String, Value>) -> Result<Value, Refused> {
+fn run(request: Map<String, Value>, release: Option<String>) -> Result<Value, Refused> {
     let (operation, payload) = operation(&request)?;
     let data = match request.get("model").filter(|model| model.is_object()) {
-        None => invoke(&operation, payload)?,
+        // `identity` names the release, as the unit's own entry answers it.
+        None => {
+            let mut answer = invoke(&operation, payload)?;
+            if let (Some(release), "identity", Some(fields)) =
+                (release, operation.as_str(), answer.as_object_mut())
+            {
+                fields.insert("release".into(), release.into());
+            }
+            answer
+        }
         Some(model) => {
             let network = opened(model)?;
             let answer = invoke(&operation, on_network(payload, network.clone()))?;
