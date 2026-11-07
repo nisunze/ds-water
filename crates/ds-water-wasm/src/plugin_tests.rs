@@ -113,3 +113,27 @@ fn every_word_fits_the_ribbon_in_both_languages() {
     }
 }
 
+#[test]
+fn the_model_kind_is_waters_own() {
+    let manifest = manifest();
+    let models = manifest["models"].as_array().unwrap();
+    assert_eq!(models.len(), 1);
+    let record = models[0].as_object().unwrap();
+    assert_eq!(record.len(), 10);
+    assert_eq!(record["id_prefix"], format!("{NAMESPACE}_"));
+    assert!(
+        record["source_prefix"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("{NAMESPACE}-"))
+    );
+    for member in ["kind", "input_invalid", "model_invalid", "source_changed"] {
+        assert!(
+            record[member]
+                .as_str()
+                .unwrap()
+                .starts_with(&format!("{NAMESPACE}_")),
+            "{member}"
+        );
+    }
+}

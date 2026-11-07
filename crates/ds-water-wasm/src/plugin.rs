@@ -24,6 +24,20 @@ pub fn manifest() -> Value {
         "schema": "ds.plugin-commands/v1",
         "plugin": "water",
         "namespace": NAMESPACE,
+        // The project model kind the Kernel reads and publishes for Water, as
+        // its built-in record declares it (ds-command-kernel `water_models.rs`).
+        "models": [{
+            "kind": "water_network",
+            "noun": "water network",
+            "title": "Water network",
+            "short": "network",
+            "engine": "Water engine",
+            "id_prefix": "water_",
+            "source_prefix": "water-r",
+            "input_invalid": "water_models_input_invalid",
+            "model_invalid": "water_network_invalid",
+            "source_changed": "water_source_changed"
+        }],
         "commands": [
             {
                 "words": ["water", "models"],
